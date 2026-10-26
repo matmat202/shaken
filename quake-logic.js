@@ -119,9 +119,11 @@ export function latLonLabel(lat, lon) {
 
 export const P = { NAME: 0, A1: 1, CC: 2, LAT: 3, LON: 4, POP: 5 };
 
+// Letters NFD does not take apart: "tromso" has to find the slashed o of Tromso, "lodz" the barred l of Lodz.
+const LETTERS = { '\u00f8': 'o', '\u00e6': 'ae', '\u0153': 'oe', '\u00df': 'ss', '\u0142': 'l', '\u0111': 'd', '\u00f0': 'd', '\u00fe': 'th', '\u0131': 'i', '\u0127': 'h' };
 export function fold(s) {
-  return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ').trim();
+  return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[\u00f8\u00e6\u0153\u00df\u0142\u0111\u00f0\u00fe\u0131\u0127]/g, (c) => LETTERS[c]).replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 export function placeLabel(p) {

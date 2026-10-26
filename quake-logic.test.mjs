@@ -89,6 +89,7 @@ eq('whole name above prefix, then list order', L.matchPlaces(pl, 'spring').map(L
 eq('narrowed by region', L.matchPlaces(pl, 'springfield, ill').map(L.placeLabel), ['Springfield, Illinois, United States']);
 eq('narrowed by country', L.matchPlaces(pl, 'spri, south').map(L.placeLabel), ['Springs, Gauteng, South Africa']);
 eq('accents and case fold', L.matchPlaces(pl, 'SAO PAU').map((p) => p[0]), ['São Paulo']);
+eq('letters NFD keeps whole', ['Tromsø', 'Łódź', 'Straße'].map(L.fold), ['tromso', 'lodz', 'strasse']);
 eq('nothing typed', L.matchPlaces(pl, '  '), []);
 eq('limit', L.matchPlaces(pl, 's', 2).length, 2);
 eq('by label', L.placeByLabel(pl, 'springfield, illinois, united states'), pl[1]);
