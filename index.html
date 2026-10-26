@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shaken · the world's earthquakes, and the biggest near you</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23a8321a'/%3E%3Cpath d='M4 17h5l3-8 4 15 3-11 2 4h7' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#a8321a">
+<meta name="description" content="Every magnitude 2.5+ earthquake in the past day, week or month, live from USGS, on a world map. Type your town to see the biggest ones near you.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://matmat202.github.io/shaken/">
+<meta property="og:title" content="Shaken">
+<meta property="og:description" content="The world's earthquakes this week, live from USGS — and the biggest near you.">
+<meta name="twitter:card" content="summary">
+<style>
+:root{color-scheme:light;--ground:#f7f6f4;--card:#fff;--ink:#1d1a18;--ink-2:#55504b;--ink-3:#6c6660;
+  --line:#e2ddd7;--sea:#eaf0f3;--land:#dcdad2;--land-edge:#c2bfb4;--accent:#a8321a;
+  --m0:#e9b949;--m1:#e48a2c;--m2:#d4561f;--m3:#a9241a;--m4:#5e0d14;--here:#1f5fbf;
+  --f-ui:system-ui,-apple-system,"Segoe UI",sans-serif}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--ground:#141210;--card:#1e1b18;--ink:#f0ebe6;
+  --ink-2:#bdb5ad;--ink-3:#a29a92;--line:#37322d;--sea:#16212a;--land:#3a3a33;--land-edge:#4d4c43;--accent:#ff9a7a;
+  --m0:#f2cd6b;--m1:#f5a04e;--m2:#f2733f;--m3:#ff4f3d;--m4:#ffb3c0;--here:#7fb2ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--f-ui);font-size:15px}
+main{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:24px;margin:4px 0 2px}h1 span{color:var(--accent)}
+.sub{color:var(--ink-2);font-size:13px;margin:0 0 12px;line-height:1.45}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+.seg button{font:inherit;font-size:14px;padding:7px 14px;border:0;background:transparent;color:var(--ink);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button:focus-visible{outline-offset:-4px}
+.seg button[aria-pressed="true"]:focus-visible{outline-color:var(--card)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--card);font-weight:600}
+.stats{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0;padding:0;list-style:none}
+.stats li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-width:92px}
+.stats b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.stats span{font-size:12px;color:var(--ink-2)}
+.stats li.big{flex:1;min-width:220px}
+.stats li.big b{font-size:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;margin:12px 0 0}
+#map svg{display:block;width:100%;height:auto;border-radius:8px;cursor:crosshair;touch-action:manipulation}
+#map .sea{fill:var(--sea)}
+#map .land{fill:var(--land);stroke:var(--land-edge);stroke-width:.6;vector-effect:non-scaling-stroke}
+#map .q{stroke:var(--card);stroke-width:.6;vector-effect:non-scaling-stroke;fill-opacity:.85}
+#map .q.b0{fill:var(--m0)}#map .q.b1{fill:var(--m1)}#map .q.b2{fill:var(--m2)}#map .q.b3{fill:var(--m3)}#map .q.b4{fill:var(--m4)}
+#map .q.out{fill-opacity:.25}
+#map .ring{fill:none;stroke:var(--here);stroke-width:1.5;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
+#map .here{fill:var(--here);stroke:var(--card);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--ink-2);margin:6px 4px 2px;align-items:center}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.hint{font-size:12px;color:var(--ink-2);margin:2px 4px 0}
+.near{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin:14px 0 0}
+.nearbox{position:relative}
+input,select,.btn{font:inherit;font-size:15px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);width:100%}
+.btn{cursor:pointer;width:auto;white-space:nowrap;color:var(--accent);font-weight:600}
+.v{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.opts{position:absolute;z-index:5;left:0;right:0;top:100%;margin:4px 0 0;padding:4px;list-style:none;background:var(--card);
+  border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.14);max-height:300px;overflow:auto}
+.opts li{padding:8px 10px;border-radius:7px;cursor:pointer}
+.opts li[aria-selected="true"]{background:var(--sea)}
+.opts li.none{color:var(--ink-2);cursor:default}
+.head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:18px 2px 8px}
+.head h2{font-size:17px;margin:0}
+.head select{width:auto;font-size:14px;padding:6px 8px}
+#note{font-size:14px;color:var(--ink-2);margin:0 2px 8px;line-height:1.45}
+ol.list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+ol.list li{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.mag{font-weight:800;font-size:17px;text-align:center;border-radius:8px;padding:6px 0;color:#fff;font-variant-numeric:tabular-nums}
+.mag.b0{background:#8a6400}.mag.b1{background:#9c4f00}.mag.b2{background:#b23a10}.mag.b3{background:#a9241a}.mag.b4{background:#5e0d14}
+ol.list .t{min-width:0}
+ol.list .t a{color:var(--ink);font-weight:600;text-decoration:none}
+ol.list .t a:hover{text-decoration:underline}
+ol.list .m{font-size:13px;color:var(--ink-2);margin-top:2px}
+ol.list .m b{color:var(--ink);font-weight:600}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--sea);color:var(--ink);margin-left:6px}
+.tag.yellow{background:#f3d36b;color:#2a2000}.tag.orange{background:#f39a4d;color:#2a1200}.tag.red{background:#c8281c;color:#fff}
+.more{display:block;margin:10px auto 0;font:inherit;font-weight:600;color:var(--accent);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 16px;cursor:pointer}
+footer{font-size:12px;color:var(--ink-2);line-height:1.5;margin:18px 2px 8px}
+[hidden]{display:none!important}
+@media (max-width:560px){.near{grid-template-columns:1fr auto}.nearbox{grid-column:1/-1}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr)}.stats li{min-width:0;padding:8px 10px}.stats li.big{grid-column:1/-1;min-width:0}.stats b{font-size:18px}}
+</style>
+</head>
+<body>
+<main>
+<h1><span>Shaken</span></h1>
+<p class="sub" id="sub">Every earthquake of magnitude 2.5 or more that the US Geological Survey has recorded, live. Type your town to see the biggest near you.</p>
+
+<div class="seg" id="periods" role="group" aria-label="Period">
+  <button type="button" data-p="day" aria-pressed="false">Past day</button><button type="button" data-p="week" aria-pressed="true">Past week</button><button type="button" data-p="month" aria-pressed="false">Past month</button>
+</div>
+
+<ul class="stats" id="stats" aria-live="polite">
+  <li><b id="sN">…</b><span>earthquakes M2.5+</span></li>
+  <li><b id="s5">…</b><span>M5 or more</span></li>
+  <li><b id="s6">…</b><span>M6 or more</span></li>
+  <li class="big"><b id="sMax">Loading the USGS feed…</b><span id="sMaxSub">the biggest</span></li>
+</ul>
+
+<div class="card" id="map">
+  <div id="mapSvg"></div>
+  <div class="legend" id="legend" aria-hidden="true">
+    <span><i style="background:var(--m0)"></i>2.5–3.9</span><span><i style="background:var(--m1)"></i>4s</span>
+    <span><i style="background:var(--m2)"></i>5s</span><span><i style="background:var(--m3)"></i>6s</span><span><i style="background:var(--m4)"></i>7+</span>
+  </div>
+  <p class="hint" id="hint">Tap the map anywhere to see what shook near that spot.</p>
+</div>
+
+<div class="near" id="nearRow">
+  <div class="nearbox"><label class="v" for="near">Near</label>
+    <input id="near" type="search" autocomplete="off" spellcheck="false" placeholder="Near… type a town or city"
+      role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="nearList">
+    <ul id="nearList" class="opts" role="listbox" aria-label="Places" hidden></ul></div>
+  <button type="button" class="btn" id="locate">Use my location</button>
+  <label class="v" for="km">Within</label>
+  <select id="km"></select>
+</div>
+
+<div class="head">
+  <h2 id="listTitle">Biggest in the world</h2>
+  <label class="v" for="sort">Sort</label>
+  <select id="sort"><option value="big">Biggest first</option><option value="new">Latest first</option></select>
+</div>
+<p id="note" hidden></p>
+<ol class="list" id="list"></ol>
+<button type="button" class="more" id="more" hidden>Show more</button>
+
+<footer>
+  Earthquakes: the <a href="https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php">USGS real-time feed</a> of magnitude 2.5+ events
+  (public domain), fetched fresh each time this page opens<span id="gen"></span>. Magnitudes and locations are revised as seismologists
+  review them; small quakes far from any seismometer go unrecorded. Towns: <a href="https://www.geonames.org/">GeoNames</a> (CC BY 4.0),
+  every place of 15,000+ people. Coastlines: <a href="https://www.naturalearthdata.com/">Natural Earth</a>. Your location, if you share it,
+  never leaves your browser. Not affiliated with USGS.
+  <br>Made by Claude for <a href="https://matmat202.github.io/">matmat202</a> ·
+  <a href="https://github.com/matmat202/shaken">source</a>
+</footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
