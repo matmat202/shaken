@@ -13,6 +13,39 @@ export const DEFAULT_KM = 500;
 export const SORTS = ['big', 'new'];
 const DAY = 86400e3;
 
+// ---- since 1900 ------------------------------------------------------------------------
+// The month feed leaves "near me" empty for most people: on the live feed of 2026-10-27,
+// 57% of the world's population had nothing M2.5+ within the default 500 km, 93% within
+// 100 km. The USGS catalogue's query service (fdsnws/event/1, CORS *) answers from 1900
+// on. Its query returns the same GeoJSON as the feed; count returns {count}. A list is the
+// 200 biggest (or latest) in range; the counts are separate calls because the catalogue
+// refuses a list of more than 20,000 and Palo Alto alone has 67,347 M2.5+ within 500 km.
+export const HISTORY = 'ever';
+export const SINCE = '1900-01-01';
+export const HIST_LIMIT = 200;
+export const FDSN = 'https://earthquake.usgs.gov/fdsnws/event/1/';
+// Near a place: everything M2.5+. The whole world since 1900 is ~14,000 M6+ quakes, so the
+// world view starts its list and counts higher.
+export const HIST_MAGS = { near: [2.5, 5, 6], world: [6, 7, 8] };
+
+export function historyURLs({ at, r, sort }) {
+  const base = new URLSearchParams({ format: 'geojson', eventtype: 'earthquake', starttime: SINCE });
+  if (at) {
+    base.set('latitude', at.lat.toFixed(2)); base.set('longitude', at.lon.toFixed(2));
+    base.set('maxradiuskm', String(r));
+  }
+  const mags = HIST_MAGS[at ? 'near' : 'world'];
+  const list = new URLSearchParams(base);
+  list.set('minmagnitude', String(at ? mags[0] : mags[1]));
+  list.set('orderby', sort === 'new' ? 'time' : 'magnitude');
+  list.set('limit', String(HIST_LIMIT));
+  const counts = mags.map((m) => {
+    const q = new URLSearchParams(base); q.set('minmagnitude', String(m));
+    return { min: m, url: `${FDSN}count?${q}` };
+  });
+  return { list: `${FDSN}query?${list}`, counts };
+}
+
 export function parseFeed(doc) {
   const events = [];
   for (const f of (doc && doc.features) || []) {
@@ -104,7 +137,11 @@ export function ago(t, now) {
   const h = Math.round(m / 60);
   if (h < 36) return `${h} h ago`;
   const d = Math.round(h / 24);
-  return `${d} day${d === 1 ? '' : 's'} ago`;
+  if (d < 60) return `${d} day${d === 1 ? '' : 's'} ago`;
+  const mo = Math.round(d / 30.44);
+  if (mo < 24) return `${mo} months ago`;
+  const y = Math.floor(d / 365.25);
+  return `${y.toLocaleString('en-US')} years ago`;
 }
 
 export function kmLabel(d) {
@@ -157,7 +194,7 @@ export function placeByLabel(places, label) {
 }
 
 // ---- URL state ------------------------------------------------------------------
-// ?p=month&near=Palo Alto, California, United States&r=250&sort=new
+// ?p=month&near=Palo Alto, California, United States&r=250&sort=new  (p=ever: since 1900)
 // ?at=37.44,-122.14 for a point picked on the map or from the browser's location.
 // Unknown values fall back to the defaults rather than throw.
 
@@ -174,7 +211,7 @@ export function encodeState({ period, near, at, r, sort }) {
 
 export function decodeState(search) {
   const q = new URLSearchParams(search || '');
-  const period = Object.hasOwn(PERIODS, q.get('p')) ? q.get('p') : DEFAULT_PERIOD;
+  const period = Object.hasOwn(PERIODS, q.get('p')) || q.get('p') === HISTORY ? q.get('p') : DEFAULT_PERIOD;
   const near = (q.get('near') || '').slice(0, 120).trim() || null;
   let at = null;
   const m = /^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/.exec(q.get('at') || '');

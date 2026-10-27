@@ -2,21 +2,23 @@
 import {
   PERIODS, RADII, DEFAULT_KM, parseFeed, inPeriod, sortEvents, nearEvents, nearest, summary,
   band, dotR, fmtMag, ago, kmLabel, latLonLabel, matchPlaces, placeLabel, placeByLabel, P,
-  encodeState, decodeState,
+  encodeState, decodeState, HISTORY, HIST_LIMIT, HIST_MAGS, historyURLs,
 } from './quake-logic.js';
 
 const FEED = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_month.geojson';
 const NS = 'http://www.w3.org/2000/svg';
 const PAGE = 25;
 const VIEW = [-180, -85, 360, 160]; // lat 85°N to 75°S: nothing shakes the poles' edges
-const WORDS = { day: 'today', week: 'this week', month: 'this month' };
+const WORDS = { day: 'today', week: 'this week', month: 'this month', ever: 'since 1900' };
 const DAMAGE = { yellow: 'some damage likely', orange: 'significant damage likely', red: 'extensive damage likely' };
-const SPAN = { day: 'the past day', week: 'the past week', month: 'the past month' };
+const SPAN = { day: 'the past day', week: 'the past week', month: 'the past month', ever: 'the USGS catalogue since 1900' };
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString('en-US');
 
 const state = { period: 'week', near: null, at: null, r: DEFAULT_KM, sort: 'big', shown: PAGE };
 let FEEDDOC = null, ALL = [], WORLD = null, PLACES = null, placesP = null;
+// Since 1900 is asked of the catalogue per place, radius and sort: {key, status, events, counts}.
+let HIST = { key: null, status: 'idle', events: [], counts: [] };
 
 function el(tag, attrs, parent) {
   const e = document.createElementNS(NS, tag);
@@ -26,7 +28,8 @@ function el(tag, attrs, parent) {
 }
 
 const now = () => (FEEDDOC && FEEDDOC.generated) || Date.now();
-const events = () => inPeriod(ALL, now(), state.period);
+const ever = () => state.period === HISTORY;
+const events = () => (ever() ? HIST.events : inPeriod(ALL, now(), state.period));
 // The point the list is about, or null for the whole world.
 const here = () => state.at;
 const hereLabel = () => state.near || (state.at && state.at.label) || '';
@@ -89,16 +92,59 @@ function drawMap() {
 // ---- stats and list -----------------------------------------------------------------
 
 function drawStats() {
+  for (const b of document.querySelectorAll('#periods button')) b.setAttribute('aria-pressed', String(b.dataset.p === state.period));
+  if (ever()) return drawHistStats();
+  $('sNl').textContent = 'earthquakes M2.5+'; $('s5l').textContent = 'M5 or more'; $('s6l').textContent = 'M6 or more';
   const list = events(), s = summary(list);
   $('sN').textContent = fmt(s.n); $('s5').textContent = fmt(s.m5); $('s6').textContent = fmt(s.m6);
   if (s.max) {
     $('sMax').textContent = `M${fmtMag(s.max.mag)} · ${s.max.place}`;
     $('sMaxSub').textContent = `the biggest ${WORDS[state.period]}, ${ago(s.max.time, Date.now())}`;
   } else { $('sMax').textContent = 'None'; $('sMaxSub').textContent = `in ${SPAN[state.period]}`; }
-  for (const b of document.querySelectorAll('#periods button')) b.setAttribute('aria-pressed', String(b.dataset.p === state.period));
+}
+
+function drawHistStats() {
+  const mags = HIST_MAGS[here() ? 'near' : 'world'];
+  const ids = ['sN', 's5', 's6'];
+  ids.forEach((id, i) => {
+    $(id + 'l').textContent = i ? `M${mags[i]} or more` : `earthquakes M${mags[i]}+`;
+    const c = HIST.counts[i];
+    $(id).textContent = HIST.status === 'error' ? '–' : c == null ? '…' : fmt(c);
+  });
+  const big = HIST.status === 'ok' ? summary(HIST.events).max : null;
+  if (HIST.status === 'loading') { $('sMax').textContent = 'Asking the USGS catalogue…'; $('sMaxSub').textContent = 'every quake since 1900'; }
+  else if (HIST.status === 'error') { $('sMax').textContent = 'Could not reach the USGS catalogue.'; $('sMaxSub').textContent = 'Try again in a minute, or pick a shorter period.'; }
+  else if (big && state.sort !== 'new') {
+    $('sMax').textContent = `M${fmtMag(big.mag)} · ${big.place}`;
+    $('sMaxSub').textContent = `the biggest since 1900, in ${new Date(big.time).getUTCFullYear()}`;
+  } else if (big) {
+    $('sMax').textContent = `M${fmtMag(big.mag)} · ${big.place}`;
+    $('sMaxSub').textContent = `the biggest of the latest ${fmt(HIST.events.length)}, in ${new Date(big.time).getUTCFullYear()}`;
+  } else { $('sMax').textContent = 'None'; $('sMaxSub').textContent = 'in the USGS catalogue since 1900'; }
+}
+
+// One list call and three counts, in parallel; the counts can take seconds (Palo Alto's
+// 67,347 M2.5+ took 8 s), so the list draws first and each count fills in as it lands.
+function loadHistory() {
+  const at = here(), u = historyURLs({ at, r: state.r, sort: state.sort });
+  if (HIST.key === u.list && HIST.status !== 'error') return;
+  const mine = HIST = { key: u.list, status: 'loading', events: [], counts: [] };
+  const get = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
+  get(u.list).then((doc) => {
+    if (HIST !== mine) return;
+    mine.events = parseFeed(doc).events; mine.status = 'ok';
+    if (ever()) { drawStats(); drawMap(); drawList(); }
+  }).catch(() => { if (HIST === mine) { mine.status = 'error'; if (ever()) { drawStats(); drawList(); } } });
+  u.counts.forEach((c, i) => get(c.url).then((j) => {
+    if (HIST !== mine || typeof j.count !== 'number') return;
+    mine.counts[i] = j.count;
+    if (ever()) { drawStats(); if (i === 0 && mine.status === 'ok') drawList(); } // the list's note quotes the total
+  }).catch(() => {}));
 }
 
 const whenFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const dateFmt = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const OLD = 300 * 86400e3;
 
 function row(e) {
   const li = document.createElement('li');
@@ -110,7 +156,7 @@ function row(e) {
   // levels that predict damage or deaths are worth a tag.
   if (DAMAGE[e.alert]) { const g = document.createElement('span'); g.className = `tag ${e.alert}`; g.textContent = DAMAGE[e.alert]; t.append(g); }
   const meta = document.createElement('div'); meta.className = 'm';
-  const bits = [ago(e.time, Date.now()), whenFmt.format(new Date(e.time))];
+  const bits = [ago(e.time, Date.now()), (Date.now() - e.time > OLD ? dateFmt : whenFmt).format(new Date(e.time))];
   if (e.depth != null) bits.push(`${Math.round(e.depth)} km deep`);
   if (e.felt) bits.push(`${fmt(e.felt)} felt report${e.felt === 1 ? '' : 's'}`);
   meta.textContent = bits.join(' · ');
@@ -125,7 +171,23 @@ function drawList() {
   const ol = $('list'), note = $('note');
   note.hidden = true;
   let rows;
-  if (at) {
+  if (ever() && HIST.status !== 'ok') {
+    rows = [];
+    note.hidden = false;
+    note.textContent = HIST.status === 'error' ? 'The USGS catalogue did not answer. Try again in a minute.' : 'Asking the USGS catalogue for every quake since 1900…';
+    $('listTitle').textContent = at ? `Biggest within ${fmt(state.r)} km of ${hereLabel()} since 1900` : 'Biggest in the world since 1900';
+  } else if (ever()) {
+    rows = sortEvents(at ? nearEvents(list, at, state.r + 1) : list, state.sort);
+    const what = `${state.sort === 'new' ? 'Latest' : 'Biggest'} ${fmt(Math.min(rows.length, HIST_LIMIT))}`;
+    $('listTitle').textContent = at ? `${what} within ${fmt(state.r)} km of ${hereLabel()} since 1900` : `${what} in the world since 1900`;
+    if (!rows.length) {
+      note.hidden = false;
+      note.textContent = `Nothing of magnitude 2.5 or more within ${fmt(state.r)} km in the USGS catalogue since 1900. Try a wider circle.`;
+    } else if (at && rows.length >= HIST_LIMIT) {
+      note.hidden = false;
+      note.textContent = `The ${state.sort === 'new' ? 'latest' : 'biggest'} ${fmt(HIST_LIMIT)} of ${HIST.counts[0] != null ? fmt(HIST.counts[0]) : 'all'} in the catalogue. Older and smaller quakes are under-recorded, more so outside the US.`;
+    }
+  } else if (at) {
     rows = sortEvents(nearEvents(list, at, state.r), state.sort);
     $('listTitle').textContent = `${state.sort === 'new' ? 'Latest' : 'Biggest'} within ${fmt(state.r)} km of ${hereLabel()}`;
     if (!rows.length) {
@@ -146,7 +208,7 @@ function drawList() {
   $('km').value = String(state.r);
 }
 
-function drawAll() { drawStats(); drawMap(); drawList(); sync(); }
+function drawAll() { if (ever()) loadHistory(); drawStats(); drawMap(); drawList(); sync(); }
 
 // ---- choosing a place -----------------------------------------------------------------
 
@@ -243,10 +305,10 @@ function wire() {
   });
   for (const r of RADII) { const o = document.createElement('option'); o.value = r; o.textContent = `within ${fmt(r)} km`; $('km').append(o); }
   $('km').addEventListener('change', () => { state.r = Number($('km').value) || DEFAULT_KM; state.shown = PAGE; drawAll(); });
-  $('sort').addEventListener('change', () => { state.sort = $('sort').value; state.shown = PAGE; drawList(); sync(); });
+  $('sort').addEventListener('change', () => { state.sort = $('sort').value; state.shown = PAGE; if (ever()) drawAll(); else { drawList(); sync(); } });
   $('periods').addEventListener('click', (e) => {
     const p = e.target.closest('button[data-p]')?.dataset.p;
-    if (p && PERIODS[p] && p !== state.period) { state.period = p; state.shown = PAGE; drawAll(); }
+    if (p && (PERIODS[p] || p === HISTORY) && p !== state.period) { state.period = p; state.shown = PAGE; drawAll(); }
   });
   $('more').addEventListener('click', () => { state.shown += PAGE * 4; drawList(); });
 }

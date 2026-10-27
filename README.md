@@ -12,6 +12,12 @@ shows the biggest (or the latest) quakes inside the circle, with how far away ea
 When nothing is in range, it tells you how far away the nearest one was. The link keeps your
 choice, so `?near=Tokyo, Japan&p=month` opens on it.
 
+A month is too short for most places: within 500 km, more than half the world's people get
+nothing M2.5+ in a typical month. **Since 1900** asks the USGS catalogue instead and lists
+the 200 biggest (or latest) quakes ever recorded inside the circle, with counts at M2.5, M5
+and M6 (`?p=ever&near=Palo Alto, California, United States`). With no town picked, it shows
+the world's biggest since 1900.
+
 ## Where the data comes from
 
 - **Earthquakes:** the [USGS real-time GeoJSON feed](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php)
@@ -19,6 +25,9 @@ choice, so `?near=Tokyo, Japan&p=month` opens on it.
   page opens; nothing is cached here. Magnitudes and locations get revised as seismologists
   review them, and small quakes far from any seismometer are never recorded at all. The
   coverage below M4 is much better in the US than elsewhere.
+- **Since 1900:** the [USGS ComCat catalogue](https://earthquake.usgs.gov/fdsnws/event/1/),
+  queried live for your place and radius. The older the quake and the farther it was from the
+  US, the more likely it is that small ones were never recorded.
 - **Towns:** [GeoNames](https://www.geonames.org/) (CC BY 4.0), every place of 15,000 or
   more people, with its state or province.
 - **Coastlines:** [Natural Earth](https://www.naturalearthdata.com/) 1:110m (public domain).

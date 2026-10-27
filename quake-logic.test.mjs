@@ -141,5 +141,33 @@ if (existsSync(placesFile)) {
   eq('shipped: label round trip', L.placeLabel(L.placeByLabel(P, lbl)), lbl);
 } else ok('shipped: data/places.json exists (run build.py)', false);
 
+// --- since 1900 -------------------------------------------------------------------------
+const Y = 365.25 * D;
+eq('ago in months and years', [59 * D, 61 * D, 400 * D, 23 * 30.44 * D, 25 * 30.44 * D, 120.4 * Y].map((t) => L.ago(now - t, now)),
+  ['59 days ago', '2 months ago', '13 months ago', '23 months ago', '2 years ago', '120 years ago']);
+eq('a 1906 quake is 120 years ago', L.ago(Date.UTC(1906, 3, 18, 13, 12), now), '120 years ago');
+eq('p=ever decodes', L.decodeState('?p=ever&near=Lagos').period, 'ever');
+eq('p=ever round trips', L.decodeState(L.encodeState({ period: 'ever', near: null, at: { lat: 37.44, lon: -122.14 }, r: 100, sort: 'big' })),
+  { period: 'ever', near: null, at: { lat: 37.44, lon: -122.14 }, r: 100, sort: 'big' });
+const qs = (u) => Object.fromEntries(new URL(u).searchParams);
+const hn = L.historyURLs({ at: { lat: 37.4419, lon: -122.143 }, r: 250, sort: 'big' });
+ok('near: a query, not a count', new URL(hn.list).pathname === '/fdsnws/event/1/query' && hn.list.startsWith(L.FDSN), hn.list);
+eq('near: list params', qs(hn.list), { format: 'geojson', eventtype: 'earthquake', starttime: '1900-01-01',
+  latitude: '37.44', longitude: '-122.14', maxradiuskm: '250', minmagnitude: '2.5', orderby: 'magnitude', limit: '200' });
+eq('near: counts at 2.5, 5, 6', hn.counts.map((c) => [c.min, new URL(c.url).pathname, qs(c.url).minmagnitude, qs(c.url).maxradiuskm, qs(c.url).orderby]),
+  [[2.5, '/fdsnws/event/1/count', '2.5', '250', undefined], [5, '/fdsnws/event/1/count', '5', '250', undefined], [6, '/fdsnws/event/1/count', '6', '250', undefined]]);
+eq('latest first asks by time', qs(L.historyURLs({ at: { lat: 1, lon: 2 }, r: 100, sort: 'new' }).list).orderby, 'time');
+const hw = L.historyURLs({ at: null, r: 500, sort: 'big' });
+eq('world: no point, starts at M7', [qs(hw.list).latitude, qs(hw.list).maxradiuskm, qs(hw.list).minmagnitude, qs(hw.list).starttime], [undefined, undefined, '7', '1900-01-01']);
+eq('world: counts at 6, 7, 8', hw.counts.map((c) => qs(c.url).minmagnitude), ['6', '7', '8']);
+// The catalogue's query answer is the feed's own GeoJSON: parseFeed reads it unchanged.
+const fdsnFix = [here('../test/hist-fixture.json'), here('./test/hist-fixture.json')].find(existsSync);
+if (fdsnFix) {
+  const h = L.parseFeed(JSON.parse(readFileSync(fdsnFix, 'utf8')));
+  const big = L.sortEvents(h.events, 'big')[0];
+  eq('catalogue fixture: 200 parsed', h.events.length, 200);
+  ok('catalogue fixture: biggest near Palo Alto since 1900 is the 1906 M7.9', big.mag === 7.9 && new Date(big.time).getUTCFullYear() === 1906, JSON.stringify(big));
+} else ok('test/hist-fixture.json exists', false);
+
 console.log(`${fail ? 'FAILED' : 'ok'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
