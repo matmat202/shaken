@@ -139,6 +139,10 @@ if (existsSync(placesFile)) {
   eq('shipped: tokyo', L.placeLabel(L.matchPlaces(P, 'tokyo')[0]), 'Tokyo, Japan');
   const lbl = 'Palo Alto, California, United States';
   eq('shipped: label round trip', L.placeLabel(L.placeByLabel(P, lbl)), lbl);
+  // The layout app.js reads by name (P.LAT, P.LON): a changed index would put the dot elsewhere.
+  const pa = L.placeByLabel(P, 'Palo Alto, California, United States');
+  eq('shipped: P names the columns', [pa[L.P.NAME], pa[L.P.A1], pa[L.P.CC], pa[L.P.LAT], pa[L.P.LON], pa[L.P.POP]], ['Palo Alto', 'California', 'United States', 37.44, -122.14, 66853]);
+  eq('shipped: "victoria" is eight Victorias (nine have the whole name, so no prefix gets in)', L.matchPlaces(P, 'victoria').map((p) => p[0]), Array(8).fill('Victoria'));
 } else ok('shipped: data/places.json exists (run build.py)', false);
 
 // --- since 1900 -------------------------------------------------------------------------
@@ -168,6 +172,30 @@ if (fdsnFix) {
   eq('catalogue fixture: 200 parsed', h.events.length, 200);
   ok('catalogue fixture: biggest near Palo Alto since 1900 is the 1906 M7.9', big.mag === 7.9 && new Date(big.time).getUTCFullYear() === 1906, JSON.stringify(big));
 } else ok('test/hist-fixture.json exists', false);
+
+// --- exact edges ---------------------------------------------------------------------------
+const Q = (id, mag, time, extra = {}) => ({ id, mag, time, lat: 0, lon: 0, tsunami: false, ...extra });
+// Three, in the wrong order: a smaller later quake must not take "biggest", nor an equal one at the same time.
+eq('summary: biggest, then latest, over three', [L.summary([Q('a', 5, 1), Q('b', 6, 2), Q('c', 4, 3)]).max.id, L.summary([Q('a', 6, 5), Q('b', 6, 5), Q('c', 6, 4)]).max.id], ['b', 'a']);
+eq('feed order: newest, then biggest among equal times', L.parseFeed({ features: [5, 7, 6].map((m, k) => ({ id: `q${k}`, properties: { type: 'earthquake', mag: m, time: 100 }, geometry: { coordinates: [0, 0, 1] } })) }).events.map((e) => e.mag), [7, 6, 5]);
+eq('sort new: newest, then biggest among equal times', L.sortEvents([Q('a', 5, 100), Q('b', 7, 100), Q('c', 6, 200)], 'new').map((e) => e.id), ['c', 'b', 'a']);
+const feature = (props, coords) => ({ id: 'x', properties: { type: 'earthquake', mag: 5, time: 1, ...props }, geometry: { coordinates: coords } });
+eq('parseFeed drops a quake missing any one of lat, lon or time', [[{}, [NaN, 1, 1]], [{}, [1, NaN, 1]], [{ time: NaN }, [1, 1, 1]]].map(([p, c]) => L.parseFeed({ features: [feature(p, c)] }).events.length), [0, 0, 0]);
+eq('parseFeed keeps the alert and defaults a missing url to ""', (({ url, alert }) => [url, alert])(L.parseFeed({ features: [feature({ alert: 'green' }, [1, 1, 1])] }).events[0]), ['', 'green']);
+eq('inPeriod: exactly now is in, a month is 30 days', [L.inPeriod([Q('a', 5, now)], now, 'week').length, L.inPeriod([Q('a', 5, now - 30.5 * D)], now, 'month').length], [1, 0]);
+eq('nearEvents: exactly the radius is in', L.nearEvents([Q('a', 5, 1)], { lat: 0, lon: 0 }, 0).length, 1);
+eq('nearest: a tie goes to the first', L.nearest([Q('a', 5, 1), Q('b', 6, 2)], { lat: 1, lon: 1 }).id, 'a');
+eq('decodeState: the poles and the date line are in, past them is not', ['?at=90,180', '?at=-90,-180', '?at=90.5,0', '?at=0,180.5'].map((q) => L.decodeState(q).at),
+  [{ lat: 90, lon: 180 }, { lat: -90, lon: -180 }, null, null]);
+eq('decodeState: every radius on offer', L.RADII.map((r) => L.decodeState(`?r=${r}`).r), [100, 250, 500, 1000, 2500]);
+eq('the radii, as offered', L.RADII, [100, 250, 500, 1000, 2500]);
+eq('a long name is clipped to 120', L.decodeState(`?near=${'x'.repeat(300)}`).near.length, 120);
+eq('ago at each boundary', [89.9e3, 90e3, 90.5e3, 59.4 * 60e3, 59.5 * 60e3, 60 * D, 59.4 * D, 731 * D, 700 * D].map((t) => L.ago(now - t, now)),
+  ['just now', '2 min ago', '2 min ago', '59 min ago', '1 h ago', '2 months ago', '59 days ago', '2 years ago', '23 months ago']);
+eq('km labels at 10', [L.kmLabel(9.96), L.kmLabel(10), L.kmLabel(10.5)], ['10.0 km', '10 km', '11 km']);
+eq('dot radii', [2, 2.5, 3, 5].map(L.dotR), [0.6, 0.6, 0.875, 1.975]);
+eq('magnitudes to one place', [L.fmtMag(6.04), L.fmtMag(7)], ['6.0', '7.0']);
+eq('eight places by default', L.matchPlaces(Array.from({ length: 12 }, (_, i) => [`Town${i}`, '', 'X', 0, 0, 1]), 'town').length, 8);
 
 console.log(`${fail ? 'FAILED' : 'ok'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
