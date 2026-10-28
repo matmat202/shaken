@@ -140,6 +140,10 @@ footer{font-size:12px;color:var(--ink-2);line-height:1.5;margin:18px 2px 8px}
   <a href="https://github.com/matmat202/shaken">source</a>
 </footer>
 </main>
+<!-- Fetched in parallel with app.js instead of behind it: each was one more round trip
+     before the first draw (projects/site-speed, 2026-10-28). -->
+<link rel="modulepreload" href="quake-logic.js">
+<link rel="preload" href="data/world.json" as="fetch" crossorigin>
 <script type="module" src="app.js"></script>
 </body>
 </html>
