@@ -2,7 +2,7 @@
 import {
   PERIODS, RADII, DEFAULT_KM, parseFeed, inPeriod, sortEvents, nearEvents, nearest, summary,
   band, dotR, fmtMag, ago, kmLabel, latLonLabel, matchPlaces, placeLabel, placeByLabel, P,
-  encodeState, decodeState, HISTORY, HIST_LIMIT, HIST_MAGS, historyURLs,
+  encodeState, decodeState, HISTORY, HIST_LIMIT, HIST_MAGS, historyURLs, feltHere, FELT_WORDS,
 } from './quake-logic.js';
 
 const FEED = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_month.geojson';
@@ -161,6 +161,10 @@ function row(e) {
   if (e.felt) bits.push(`${fmt(e.felt)} felt report${e.felt === 1 ? '' : 's'}`);
   meta.textContent = bits.join(' · ');
   if (e.d != null) { const b = document.createElement('b'); b.textContent = ` · ${kmLabel(e.d)} away`; meta.append(b); }
+  if (e.d != null) {
+    const f = feltHere(e, e.d), s = document.createElement('span');
+    s.className = `felt ${f}`; s.textContent = ` · ${FELT_WORDS[f]}`; meta.append(s);
+  }
   t.append(meta);
   li.append(m, t);
   return li;

@@ -104,6 +104,35 @@ export function nearest(events, at) {
   return best;
 }
 
+// ---- felt here? -------------------------------------------------------------------------
+// "Near me" lists everything within the circle, and most of it nobody there could feel: an
+// M2.6 at 400 km is a line on the list and nothing at all on the ground. The intensity a
+// quake reaches at a distance comes from AWW2014 (Atkinson, Worden & Wald), the equation
+// USGS "Did You Feel It?" plots against its reports. The coefficients were recovered by
+// least squares from those plotted curves for 90 events of the 2026-10-28 month feed
+// (epicentral distance with the depth folded in; West to 0.06 intensity units at the 95th
+// percentile, East to 0.22). West predicts weaker shaking than reports show and East
+// stronger, so each claim is made with the model that errs against it, and the gap between
+// them is "maybe". Against 1,777 DYFI 10 km cells: "too far" (East < 1.5) was said of 0.4%
+// of cells where 2+ people felt it; "likely" (West >= 3) of 0.7% of cells reporting not felt.
+export const IPE = {
+  west: [11.4772, 1.85571, -0.00254, -1.62698, -0.00219, 1.75741, -0.38088],
+  east: [12.23709, 1.95484, 0.01544, -1.46683, -0.00137, 2.2475, -0.41455],
+};
+export const FELT_LIKELY = 3, FELT_NONE = 1.5;
+export function intensity(c, mag, depth, d) {
+  const h = Math.max(0, depth || 0);
+  const R = Math.sqrt(d * d + h * h + 196), lR = Math.log10(R), B = Math.max(0, Math.log10(R / 50));
+  return c[0] + c[1] * (mag - 6) + c[2] * (mag - 6) ** 2 + c[3] * lR + c[4] * R + c[5] * B + c[6] * mag * lR;
+}
+// 'likely' | 'maybe' | 'no', for a quake `d` km from the visitor.
+export function feltHere(e, d) {
+  if (intensity(IPE.east, e.mag, e.depth, d) < FELT_NONE) return 'no';
+  if (intensity(IPE.west, e.mag, e.depth, d) >= FELT_LIKELY) return 'likely';
+  return 'maybe';
+}
+export const FELT_WORDS = { likely: 'likely felt here', maybe: 'maybe felt by a few here', no: 'too far to feel here' };
+
 export function summary(events) {
   let max = null, m5 = 0, m6 = 0, m7 = 0, tsunami = 0;
   for (const e of events) {

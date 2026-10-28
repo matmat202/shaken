@@ -197,5 +197,36 @@ eq('dot radii', [2, 2.5, 3, 5].map(L.dotR), [0.6, 0.6, 0.875, 1.975]);
 eq('magnitudes to one place', [L.fmtMag(6.04), L.fmtMag(7)], ['6.0', '7.0']);
 eq('eight places by default', L.matchPlaces(Array.from({ length: 12 }, (_, i) => [`Town${i}`, '', 'X', 0, 0, 1]), 'town').length, 8);
 
+// --- felt here? ---------------------------------------------------------------------------
+// test/dyfi-fixture.json is USGS's own data, not this module's: the AWW2014 curves DYFI
+// plotted for three events, and 1,777 observed 10 km cells from 90 events.
+const DY = JSON.parse(readFileSync(here('../test/dyfi-fixture.json'), 'utf8'));
+for (const c of DY.curves) {
+  const worst = Math.max(...c.pts.map(([d, y]) => Math.abs(L.intensity(L.IPE[c.model], c.mag, c.depth, d) - y)));
+  ok(`${c.model} curve of M${c.mag} ${c.id} matches USGS`, worst <= (c.model === 'west' ? 0.1 : 0.6), `worst ${worst.toFixed(3)}`);
+}
+ok('curves cover both models', new Set(DY.curves.map((c) => c.model)).size === 2);
+const lab = DY.cells.map(([mag, depth, d, cdi, n]) => ({ f: L.feltHere({ mag, depth }, d), cdi, n }));
+const share = (xs, f) => xs.filter((x) => x.f === f).length / xs.length;
+const felt2 = lab.filter((x) => x.cdi >= 2 && x.n >= 2), notFelt = lab.filter((x) => x.cdi < 2);
+ok('fixture has felt and not-felt cells', felt2.length > 700 && notFelt.length > 100, `${felt2.length} ${notFelt.length}`);
+ok('"too far" is almost never said where 2+ people felt it', share(felt2, 'no') <= 0.01, share(felt2, 'no'));
+ok('"likely" is almost never said where people did not feel it', share(notFelt, 'likely') <= 0.02, share(notFelt, 'likely'));
+// The same bounds would pass a function that always says 'maybe', so the labels must also be used.
+ok('"likely" is said of a real share of felt cells', share(felt2, 'likely') >= 0.2, share(felt2, 'likely'));
+ok('"too far" is said of some not-felt cells', share(notFelt, 'no') >= 0.05, share(notFelt, 'no'));
+// Fixed points, so a sign or unit slip shows up as a named case and not only as a share.
+eq('M2.6 at 400 km is too far', L.feltHere({ mag: 2.6, depth: 10 }, 400), 'no');
+eq('M5.5 at 80 km is likely felt', L.feltHere({ mag: 5.5, depth: 41 }, 80), 'likely');
+eq('M3.5 at 60 km is a maybe', L.feltHere({ mag: 3.5, depth: 8 }, 60), 'maybe');
+eq('deeper is weaker at the epicentre', L.intensity(L.IPE.west, 5, 300, 0) < L.intensity(L.IPE.west, 5, 10, 0), true);
+eq('negative depth reads as the surface', L.intensity(L.IPE.east, 4, -1, 20), L.intensity(L.IPE.east, 4, 0, 20));
+eq('missing depth reads as the surface', L.feltHere({ mag: 4, depth: null }, 150), L.feltHere({ mag: 4, depth: 0 }, 150));
+let conflicts = 0;
+for (let m = 2.5; m <= 9.5; m += 0.1) for (const h of [0, 10, 35, 100, 300, 600]) for (let d = 0; d <= 2500; d += 5)
+  if (L.intensity(L.IPE.west, m, h, d) >= L.FELT_LIKELY && L.intensity(L.IPE.east, m, h, d) < L.FELT_NONE) conflicts++;
+eq('the two models never contradict each other in range', conflicts, 0);
+eq('every label has words', Object.keys(L.FELT_WORDS).sort(), ['likely', 'maybe', 'no']);
+
 console.log(`${fail ? 'FAILED' : 'ok'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
