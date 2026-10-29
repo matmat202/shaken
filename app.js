@@ -307,7 +307,7 @@ function wire() {
       $('hint').textContent = 'Location was not shared. Type a town or tap the map instead.';
     }, { maximumAge: 600e3, timeout: 15e3 });
   });
-  for (const r of RADII) { const o = document.createElement('option'); o.value = r; o.textContent = `within ${fmt(r)} km`; $('km').append(o); }
+  for (const r of RADII) { const o = document.createElement('option'); o.value = r; o.textContent = `${fmt(r)} km`; $('km').append(o); }
   $('km').addEventListener('change', () => { state.r = Number($('km').value) || DEFAULT_KM; state.shown = PAGE; drawAll(); });
   $('sort').addEventListener('change', () => { state.sort = $('sort').value; state.shown = PAGE; if (ever()) drawAll(); else { drawList(); sync(); } });
   $('periods').addEventListener('click', (e) => {
