@@ -88,6 +88,8 @@ footer{font-size:12px;color:var(--ink-2);line-height:1.5;margin:18px 2px 8px}
 [hidden]{display:none!important}
 @media (max-width:560px){.near{grid-template-columns:1fr auto}.nearbox{grid-column:1/-1}
   .stats{display:grid;grid-template-columns:repeat(3,1fr)}.stats li{min-width:0;padding:8px 10px}.stats li.big{grid-column:1/-1;min-width:0}.stats b{font-size:18px}}
+/* iOS Safari zooms the page into any field under 16px when it is tapped (input-zoom) */
+input,select,textarea{font-size:16px!important}
 </style>
 </head>
 <body>
