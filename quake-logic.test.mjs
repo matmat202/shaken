@@ -228,5 +228,41 @@ for (let m = 2.5; m <= 9.5; m += 0.1) for (const h of [0, 10, 35, 100, 300, 600]
 eq('the two models never contradict each other in range', conflicts, 0);
 eq('every label has words', Object.keys(L.FELT_WORDS).sort(), ['likely', 'maybe', 'no']);
 
+// --- aftershock forecast (test/oaf-*.json: USGS's real product for the Panama M7.7, issued
+// 2026-10-26; the numbers below were read off that file in Python, not by this module) ---
+const FC = JSON.parse(readFileSync(here('../test/oaf-forecast.json'), 'utf8'));
+const DET = JSON.parse(readFileSync(here('../test/oaf-detail.json'), 'utf8'));
+eq('forecast URL from the detail', L.forecastURL(DET), 'https://earthquake.usgs.gov/product/oaf/us6000u18k/us/1793030666272/forecast.json');
+eq('no oaf product, no URL', L.forecastURL({ properties: { products: { shakemap: [{}] } } }), null);
+eq('no detail, no URL', L.forecastURL(null), null);
+eq('detail URL', L.DETAIL('us6000u18k'), 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000u18k.geojson');
+const at = (y, mo, d, h = 0) => L.aftershockOutlook(FC, Date.UTC(y, mo - 1, d, h));
+const w1 = at(2026, 10, 30, 12);
+eq('mid-week picks the 1-week window', w1 && w1.label, '1 week');
+eq('1-week odds of M5+, M6+, M7+', w1.rows, [{ mag: 5, p: 0.3919 }, { mag: 6, p: 0.0479 }, { mag: 7, p: 0.0039 }]);
+eq('1-week M3+ count', w1.count, { median: 53, lo: 23, hi: 125 });
+eq('bigger than the M7.7', [w1.main, w1.bigger], [7.7, 0.001]);
+eq('window bounds', [w1.from, w1.to], [1793030428116, 1793635228116]);
+eq('within the first day, the 1-day window', at(2026, 10, 26, 12).label, '1 day');
+eq('1-day M5+', at(2026, 10, 26, 12).rows[0], { mag: 5, p: 0.0801 });
+eq('just after the week ends, the month', at(2026, 11, 2, 17).label, '1 month');
+eq('just before the week ends, still the week', L.aftershockOutlook(FC, 1793635228116 - 1).label, '1 week');
+eq('at the week\'s end exactly, the month', L.aftershockOutlook(FC, 1793635228116).label, '1 month');
+eq('next June, the year', at(2027, 6, 1).label, '1 year');
+eq('after the year, nothing', at(2027, 12, 1), null);
+eq('expired, nothing', L.aftershockOutlook({ ...FC, expireTime: Date.UTC(2026, 9, 29) }, Date.UTC(2026, 9, 30)), null);
+eq('windows out of order still pick the shortest live one', L.aftershockOutlook({ ...FC, forecast: [...FC.forecast].reverse() }, Date.UTC(2026, 9, 30)).label, '1 week');
+// A small mainshock: odds at or above its own magnitude belong to 'bigger', not to the rows.
+const small = { ...FC, model: { parameters: { magMain: 5.6 } } };
+eq('M5.6 mainshock keeps M5+, drops M6+ and M7+', L.aftershockOutlook(small, Date.UTC(2026, 9, 30)).rows.map((r) => r.mag), [5]);
+eq('M5.0 mainshock drops M5 too', L.aftershockOutlook({ ...FC, model: { parameters: { magMain: 5 } } }, Date.UTC(2026, 9, 30)).rows, []);
+eq('no forecast, nothing', L.aftershockOutlook(null, 0), null);
+eq('pct', ['0', '0.0004', '0.0099', '0.0479', '0.3919', '0.995', '1'].map((p) => L.pct(Number(p))), ['0%', '<1%', '<1%', '5%', '39%', '>99%', '>99%']);
+const oafIds = L.parseFeed(JSON.parse(readFileSync(here('../test/fixture.json'), 'utf8'))).events.filter((e) => e.oaf).map((e) => e.id).sort();
+eq('the fixture flags the 12 quakes USGS forecast for', oafIds.length, 12);
+ok('the Panama M7.7 is one of them', oafIds.includes('us6000u18k'));
+eq('a feed without types flags none', L.parseFeed(fake).events.filter((e) => e.oaf).length, 0);
+eq('types without oaf is not oaf', L.parseFeed({ features: [F('z', 5, 1, 0, 0, { types: ',origin,oafx,' })] }).events[0].oaf, false);
+
 console.log(`${fail ? 'FAILED' : 'ok'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -57,6 +57,8 @@ export function parseFeed(doc) {
       id: f.id, mag: p.mag, place: p.place || 'Unnamed location', time: p.time,
       lat, lon, depth: Number.isFinite(depth) ? depth : null,
       url: p.url || '', felt: p.felt || 0, tsunami: !!p.tsunami, alert: p.alert || null,
+      // USGS issues an aftershock forecast (product 'oaf') for US M4+ and the world's big ones.
+      oaf: typeof p.types === 'string' && p.types.includes(',oaf,'),
     });
   }
   events.sort((a, b) => b.time - a.time || b.mag - a.mag);
@@ -251,4 +253,45 @@ export function decodeState(search) {
   const r = RADII.includes(+q.get('r')) ? +q.get('r') : DEFAULT_KM;
   const sort = SORTS.includes(q.get('sort')) ? q.get('sort') : 'big';
   return { period, near, at, r, sort };
+}
+
+// ---- aftershock forecast: USGS's 'oaf' product -------------------------------------------
+
+export const DETAIL = (id) => `https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/${encodeURIComponent(id)}.geojson`;
+export const AFTER_MAGS = [5, 6, 7];
+
+// The forecast.json of the event's preferred oaf product, or null if it has none.
+export function forecastURL(detail) {
+  const o = detail && detail.properties && detail.properties.products && detail.properties.products.oaf;
+  const c = o && o[0] && o[0].contents && o[0].contents['forecast.json'];
+  return (c && c.url) || null;
+}
+
+// What the forecast says about the shortest window that has not yet ended: chances of an
+// aftershock of M5+, M6+, M7+ (only those below the mainshock: one at or above it is the
+// 'bigger' line), the usual count of M3+, and the chance of one bigger than the mainshock.
+// Every window starts when the forecast was issued, so a 1-week window may be half spent.
+export function aftershockOutlook(fc, now) {
+  if (!fc || !Array.isArray(fc.forecast) || (fc.expireTime && fc.expireTime <= now)) return null;
+  const ws = fc.forecast.filter((w) => w && w.timeEnd > now && Array.isArray(w.bins)).sort((a, b) => a.timeEnd - b.timeEnd);
+  const w = ws[0];
+  if (!w) return null;
+  const main = fc.model && fc.model.parameters && fc.model.parameters.magMain;
+  const bin = (m) => w.bins.find((b) => b.magnitude === m);
+  const rows = AFTER_MAGS.filter((m) => !(main <= m) && bin(m)).map((m) => ({ mag: m, p: bin(m).probability }));
+  const m3 = bin(3);
+  const bigger = w.aboveMainshockMag && Number.isFinite(w.aboveMainshockMag.probability) ? w.aboveMainshockMag.probability : null;
+  return {
+    label: String(w.label || '').toLowerCase(), from: w.timeStart, to: w.timeEnd, issued: fc.creationTime || w.timeStart,
+    rows, count: m3 ? { median: m3.median, lo: m3.p95minimum, hi: m3.p95maximum } : null,
+    main: Number.isFinite(main) ? main : null, bigger,
+  };
+}
+
+// A probability as people read one: never '0%' for something possible, nor '100%'.
+export function pct(p) {
+  if (!(p > 0)) return '0%';
+  if (p < 0.01) return '<1%';
+  if (p > 0.99) return '>99%';
+  return `${Math.round(p * 100)}%`;
 }

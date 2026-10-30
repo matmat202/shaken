@@ -1,0 +1,44 @@
+{
+ "type": "Feature",
+ "id": "us6000u18k",
+ "properties": {
+  "mag": 7.7,
+  "place": "12 km WSW of Pitaloza Arriba, Panama",
+  "products": {
+   "oaf": [
+    {
+     "indexid": 28735069,
+     "indexTime": 1793030670900,
+     "id": "urn:usgs-product:us:oaf:us6000u18k:1793030666272",
+     "type": "oaf",
+     "code": "us6000u18k",
+     "source": "us",
+     "updateTime": 1793030666272,
+     "status": "UPDATE",
+     "properties": {
+      "eventsource": "us",
+      "eventsourcecode": "6000u18k",
+      "review-status": "reviewed"
+     },
+     "preferredWeight": 8,
+     "contents": {
+      "forecast.json": {
+       "contentType": "application/json",
+       "lastModified": 1793030666000,
+       "length": 29442,
+       "url": "https://earthquake.usgs.gov/product/oaf/us6000u18k/us/1793030666272/forecast.json",
+       "sha256": "9iCGz7NM2ulupFcT0GJRTBdBizZgWgFkf33z6INeupE="
+      },
+      "contents.xml": {
+       "contentType": "application/xml",
+       "lastModified": 1793030666000,
+       "length": 266,
+       "url": "https://earthquake.usgs.gov/product/oaf/us6000u18k/us/1793030666272/contents.xml",
+       "sha256": "AfPeni7w+XOcRioL4oCJySOmC9FlAk+TiyMSAiG1Kf0="
+      }
+     }
+    }
+   ]
+  }
+ }
+}

@@ -3,6 +3,7 @@ import {
   PERIODS, RADII, DEFAULT_KM, parseFeed, inPeriod, sortEvents, nearEvents, nearest, summary,
   band, dotR, fmtMag, ago, kmLabel, latLonLabel, matchPlaces, placeLabel, placeByLabel, P,
   encodeState, decodeState, HISTORY, HIST_LIMIT, HIST_MAGS, historyURLs, feltHere, FELT_WORDS,
+  DETAIL, forecastURL, aftershockOutlook, pct,
 } from './quake-logic.js';
 
 const FEED = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_month.geojson';
@@ -166,8 +167,53 @@ function row(e) {
     s.className = `felt ${f}`; s.textContent = ` · ${FELT_WORDS[f]}`; meta.append(s);
   }
   t.append(meta);
+  if (e.oaf) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'aft';
+    b.textContent = 'Aftershock forecast'; b.setAttribute('aria-expanded', 'false');
+    b.addEventListener('click', () => toggleForecast(e, b, t));
+    t.append(b);
+  }
   li.append(m, t);
   return li;
+}
+
+// ---- aftershock forecast, asked of USGS only when a row's button is pressed -------------
+
+const dayFmt = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+const FORECASTS = new Map(); // event id -> promise of the outlook (null when USGS has none current)
+const getJSON = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
+
+function loadForecast(e) {
+  if (!FORECASTS.has(e.id)) {
+    const p = getJSON(DETAIL(e.id)).then((d) => { const u = forecastURL(d); return u ? getJSON(u) : null; })
+      .then((fc) => aftershockOutlook(fc, Date.now()));
+    p.catch(() => FORECASTS.delete(e.id)); // a failed ask is asked again next time
+    FORECASTS.set(e.id, p);
+  }
+  return FORECASTS.get(e.id);
+}
+
+function drawForecast(box, o) {
+  box.replaceChildren();
+  const line = (cls, text) => { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = text; box.append(d); return d; };
+  if (!o) { line('', 'USGS has no current aftershock forecast for this quake.'); return; }
+  line('h', `USGS aftershock forecast, ${dayFmt.format(new Date(o.from))} – ${dayFmt.format(new Date(o.to))} · updated ${ago(o.issued, Date.now())}`);
+  const odds = o.rows.map((r) => `M${r.mag}+ ${pct(r.p)}`);
+  if (o.bigger != null && o.main != null) odds.push(`bigger than this M${fmtMag(o.main)} ${pct(o.bigger)}`);
+  if (odds.length) line('odds', `Chance of at least one: ${odds.join(' · ')}`);
+  if (o.count) line('', o.count.hi > 0
+    ? `Most likely ${fmt(o.count.median)} aftershocks of M3+ in that time (95% range ${fmt(o.count.lo)}–${fmt(o.count.hi)}).`
+    : 'Few or no aftershocks of M3+ expected in that time.');
+}
+
+async function toggleForecast(e, b, t) {
+  let box = t.querySelector('.after');
+  if (box) { box.remove(); b.setAttribute('aria-expanded', 'false'); return; }
+  box = document.createElement('div'); box.className = 'after'; box.setAttribute('role', 'status');
+  box.textContent = 'Asking USGS…';
+  t.append(box); b.setAttribute('aria-expanded', 'true');
+  try { drawForecast(box, await loadForecast(e)); }
+  catch { box.textContent = 'Could not reach USGS for the forecast. Press again to retry.'; }
 }
 
 function drawList() {
