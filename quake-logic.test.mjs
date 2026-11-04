@@ -220,6 +220,10 @@ eq('M2.6 at 400 km is too far', L.feltHere({ mag: 2.6, depth: 10 }, 400), 'no');
 eq('M5.5 at 80 km is likely felt', L.feltHere({ mag: 5.5, depth: 41 }, 80), 'likely');
 eq('M3.5 at 60 km is a maybe', L.feltHere({ mag: 3.5, depth: 8 }, 60), 'maybe');
 eq('deeper is weaker at the epicentre', L.intensity(L.IPE.west, 5, 300, 0) < L.intensity(L.IPE.west, 5, 10, 0), true);
+// The formula pinned to values computed in Python from the published coefficients with
+// R = sqrt(d^2 + h^2 + 14^2): the curve tolerances above are too loose to see a 14^2 -> 197.
+near('West M7 at the epicentre, surface focus', L.intensity(L.IPE.west, 7, 0, 0), 8.37922188490833, 1e-9);
+near('West M4 at 100 km, surface focus', L.intensity(L.IPE.west, 4, 0, 100), 1.756645585538256, 1e-9);
 eq('negative depth reads as the surface', L.intensity(L.IPE.east, 4, -1, 20), L.intensity(L.IPE.east, 4, 0, 20));
 eq('missing depth reads as the surface', L.feltHere({ mag: 4, depth: null }, 150), L.feltHere({ mag: 4, depth: 0 }, 150));
 let conflicts = 0;
@@ -257,6 +261,13 @@ const small = { ...FC, model: { parameters: { magMain: 5.6 } } };
 eq('M5.6 mainshock keeps M5+, drops M6+ and M7+', L.aftershockOutlook(small, Date.UTC(2026, 9, 30)).rows.map((r) => r.mag), [5]);
 eq('M5.0 mainshock drops M5 too', L.aftershockOutlook({ ...FC, model: { parameters: { magMain: 5 } } }, Date.UTC(2026, 9, 30)).rows, []);
 eq('no forecast, nothing', L.aftershockOutlook(null, 0), null);
+// Boundaries mutwatch found unpinned (2026-11-03).
+eq('expiring this very instant is expired', L.aftershockOutlook({ ...FC, expireTime: Date.UTC(2026, 9, 30) }, Date.UTC(2026, 9, 30)), null);
+eq('issued is the forecast\'s creation time', w1.issued, 1793030079480);
+eq('no creation time, issued is the window start', L.aftershockOutlook({ ...FC, creationTime: undefined }, Date.UTC(2026, 9, 30, 12)).issued, 1793030428116);
+const noBig = { ...FC, forecast: FC.forecast.map(({ aboveMainshockMag, ...w }) => w) };
+eq('a window with no above-mainshock line has no bigger', L.aftershockOutlook(noBig, Date.UTC(2026, 9, 30, 12)).bigger, null);
+eq('pct at its edges', [0.01, 0.99].map(L.pct), ['1%', '99%']);
 eq('pct', ['0', '0.0004', '0.0099', '0.0479', '0.3919', '0.995', '1'].map((p) => L.pct(Number(p))), ['0%', '<1%', '<1%', '5%', '39%', '>99%', '>99%']);
 const oafIds = L.parseFeed(JSON.parse(readFileSync(here('../test/fixture.json'), 'utf8'))).events.filter((e) => e.oaf).map((e) => e.id).sort();
 eq('the fixture flags the 12 quakes USGS forecast for', oafIds.length, 12);
