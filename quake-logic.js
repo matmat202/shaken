@@ -189,9 +189,18 @@ export const P = { NAME: 0, A1: 1, CC: 2, LAT: 3, LON: 4, POP: 5 };
 
 // Letters NFD does not take apart: "tromso" has to find the slashed o of Tromso, "lodz" the barred l of Lodz.
 const LETTERS = { '\u00f8': 'o', '\u00e6': 'ae', '\u0153': 'oe', '\u00df': 'ss', '\u0142': 'l', '\u0111': 'd', '\u00f0': 'd', '\u00fe': 'th', '\u0131': 'i', '\u0127': 'h' };
+// Memoised on the coerced string: matchPlaces folds every name in the places file on every
+// call, so the live search re-folded thousands of names per keystroke. node --cpu-prof put
+// fold at 59.8% of this module's equivalence sweep (2026-11-11). The key is the coerced
+// string, never the argument, so a non-string cannot hold a reference.
+const foldCache = new Map();
 export function fold(s) {
-  return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const k = String(s);
+  if (foldCache.has(k)) return foldCache.get(k);
+  const v = k.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/[\u00f8\u00e6\u0153\u00df\u0142\u0111\u00f0\u00fe\u0131\u0127]/g, (c) => LETTERS[c]).replace(/[^a-z0-9]+/g, ' ').trim();
+  foldCache.set(k, v);
+  return v;
 }
 
 export function placeLabel(p) {
