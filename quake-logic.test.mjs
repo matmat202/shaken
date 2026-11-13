@@ -313,6 +313,12 @@ for (const [lat, lon] of [[78.2, 15.6], [-80, -120], [85, 170]]) {
 }
 eq('dots at world scale', L.dotScale([-180, -85, 360, 160]), 1);
 near('dots in a 36° view are a third the size', L.dotScale([0, 0, 36, 16]), Math.sqrt(0.1), 1e-12);
+near('a few dots in a 36° view keep the square root', L.dotScale([0, 0, 36, 16], [1, 1, 2]), Math.sqrt(0.1), 1e-12);
+const crowd = Array(200).fill(L.dotR(6.5)), cs = L.dotScale([0, 0, 26, 26 / 2.25], crowd);
+near('200 big dots in a 26° view cover 12% of it, no more', crowd.reduce((a, r) => a + Math.PI * (r * cs) ** 2, 0) / (26 * 26 / 2.25), 0.12, 1e-9);
+ok('and are drawn smaller than the square root would', cs < Math.sqrt(26 / 360));
+eq('a crowd never shrinks dots below their world size', L.dotScale([0, 0, 36, 16], Array(5000).fill(3)), 0.1);
+eq('dots at world scale, crowded or not', L.dotScale([-180, -85, 360, 160], Array(5000).fill(3)), 1);
 
 console.log(`${fail ? 'FAILED' : 'ok'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

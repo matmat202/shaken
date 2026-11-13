@@ -51,7 +51,9 @@ function drawMap() {
   const inside = near ? new Set(near.map((e) => e.id)) : null;
   // Zoomed to the circle, and to the nearest quake when the circle is empty.
   const V = at && !worldView ? mapView(at, state.r, near.length ? null : nearest(list, at)) : WORLD_VIEW;
-  const k = dotScale(V), wraps = V[0] < -180 || V[0] + V[2] > 180;
+  const wraps = V[0] < -180 || V[0] + V[2] > 180;
+  const inView = (e) => e.lat >= -V[1] - V[3] && e.lat <= -V[1] && [-360, 0, 360].some((dx) => e.lon + dx >= V[0] && e.lon + dx <= V[0] + V[2]);
+  const k = dotScale(V, V[2] < WORLD_VIEW[2] ? list.filter(inView).map((e) => dotR(e.mag)) : []);
   const svg = el('svg', { viewBox: V.map((v) => +v.toFixed(3)).join(' '), role: 'img' });
   el('rect', { class: 'sea', x: V[0], y: V[1], width: V[2], height: V[3] }, svg);
   if (WORLD) el('path', { class: 'land', d: WORLD.land }, svg);

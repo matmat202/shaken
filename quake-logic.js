@@ -208,9 +208,15 @@ export function mapView(at, r, also = null) {
 }
 
 // Dots are sized in degrees for the world view. Zoomed in, they grow on screen, but by the
-// square root of the zoom, not all of it, or an M5 would fill a 100 km circle.
-export function dotScale(view) {
-  return Math.sqrt(view[2] / WORLD_VIEW[2]);
+// square root of the zoom, not all of it, or an M5 would fill a 100 km circle; and less if
+// the dots in view (their world radii, `rs`) would then cover more than DOT_COVER of it,
+// as the 200 biggest since 1900 round Palo Alto did. Never smaller than the world view's.
+export const DOT_COVER = 0.12;
+export function dotScale(view, rs = []) {
+  const k = view[2] / WORLD_VIEW[2];
+  const area = rs.reduce((a, r) => a + Math.PI * r * r, 0);
+  const fit = area ? Math.sqrt((DOT_COVER * view[2] * view[3]) / area) : Infinity;
+  return Math.max(k, Math.min(Math.sqrt(k), fit));
 }
 
 export function fmtMag(m) { return m.toFixed(1); }
