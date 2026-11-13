@@ -158,6 +158,61 @@ export function dotR(mag) {
   return 0.6 + Math.max(0, mag - 2.5) * 0.55;
 }
 
+// ---- the map's view -------------------------------------------------------------------
+// Map units are degrees: x = lon, y = -lat. The world view stops at 85°N and 75°S, where
+// nothing much shakes; every view keeps its 9:4 shape so the card never changes height.
+export const WORLD_VIEW = [-180, -85, 360, 160];
+const ASPECT = WORLD_VIEW[2] / WORLD_VIEW[3];
+export const MIN_VIEW_W = 14; // a 100 km circle still shows its coast and its neighbours
+const PAD = 1.3;
+
+// A true circle of `r` km around a point, as [x, y] map points (destination-point
+// formula), unwrapped so it never jumps across the map at the antimeridian.
+export function ringPoints(lat, lon, r, steps = 96) {
+  const d = r / 6371.0088, p1 = (lat * Math.PI) / 180, l1 = (lon * Math.PI) / 180;
+  const pts = [];
+  let prev = null;
+  for (let i = 0; i <= steps; i++) {
+    const b = (i / steps) * 2 * Math.PI;
+    const p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(b));
+    let x = ((l1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2))) * 180) / Math.PI;
+    // As the bearing turns, atan2 only ever wraps from +180° to -180° (on a ring round a pole).
+    if (prev != null) while (prev - x > 180) x += 360;
+    prev = x;
+    pts.push([x, -(p2 * 180) / Math.PI]);
+  }
+  return pts;
+}
+
+// The viewBox for a circle of `r` km around `at`: the circle plus a margin, and `also`
+// (the nearest quake, when nothing is inside) if given. Null `at`, or a box as wide as the
+// world (as every circle over a pole is), gives the world. x may run past ±180: the page draws the
+// map again beside itself there, so Fiji is not cut in half.
+export function mapView(at, r, also = null) {
+  if (!at) return WORLD_VIEW.slice();
+  const pts = ringPoints(at.lat, at.lon, r, 48);
+  if (also) {
+    let x = also.lon;
+    while (x - at.lon > 180) x -= 360;
+    while (at.lon - x > 180) x += 360;
+    pts.push([x, -also.lat]);
+  }
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  let w = Math.max((x1 - x0) * PAD, (y1 - y0) * PAD * ASPECT, MIN_VIEW_W);
+  if (w >= WORLD_VIEW[2]) return WORLD_VIEW.slice();
+  const h = w / ASPECT;
+  const cy = (y0 + y1) / 2;
+  const top = Math.min(Math.max(cy - h / 2, WORLD_VIEW[1]), WORLD_VIEW[1] + WORLD_VIEW[3] - h);
+  return [(x0 + x1) / 2 - w / 2, top, w, h];
+}
+
+// Dots are sized in degrees for the world view. Zoomed in, they grow on screen, but by the
+// square root of the zoom, not all of it, or an M5 would fill a 100 km circle.
+export function dotScale(view) {
+  return Math.sqrt(view[2] / WORLD_VIEW[2]);
+}
+
 export function fmtMag(m) { return m.toFixed(1); }
 
 export function ago(t, now) {

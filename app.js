@@ -3,13 +3,12 @@ import {
   PERIODS, RADII, DEFAULT_KM, parseFeed, inPeriod, sortEvents, nearEvents, nearest, summary,
   band, dotR, fmtMag, ago, kmLabel, latLonLabel, matchPlaces, placeLabel, placeByLabel, P,
   encodeState, decodeState, HISTORY, HIST_LIMIT, HIST_MAGS, historyURLs, feltHere, FELT_WORDS,
-  DETAIL, forecastURL, aftershockOutlook, pct,
+  DETAIL, forecastURL, aftershockOutlook, pct, ringPoints, mapView, dotScale, WORLD_VIEW,
 } from './quake-logic.js';
 
 const FEED = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_month.geojson';
 const NS = 'http://www.w3.org/2000/svg';
 const PAGE = 25;
-const VIEW = [-180, -85, 360, 160]; // lat 85°N to 75°S: nothing shakes the poles' edges
 const WORDS = { day: 'today', week: 'this week', month: 'this month', ever: 'since 1900' };
 const DAMAGE = { yellow: 'some damage likely', orange: 'significant damage likely', red: 'extensive damage likely' };
 const SPAN = { day: 'the past day', week: 'the past week', month: 'the past month', ever: 'the USGS catalogue since 1900' };
@@ -17,6 +16,8 @@ const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString('en-US');
 
 const state = { period: 'week', near: null, at: null, r: DEFAULT_KM, sort: 'big', shown: PAGE };
+// The map zooms to the circle once there is one; this shows the whole world instead.
+let worldView = false;
 let FEEDDOC = null, ALL = [], WORLD = null, PLACES = null, placesP = null;
 // Since 1900 is asked of the catalogue per place, radius and sort: {key, status, events, counts}.
 let HIST = { key: null, status: 'idle', events: [], counts: [] };
@@ -42,43 +43,39 @@ function sync() {
 
 // ---- map --------------------------------------------------------------------------
 
-// A true circle of `r` km around a point, as lon/lat steps (destination-point formula),
-// unwrapped so it never jumps across the map at the antimeridian.
-function circle(lat, lon, r) {
-  const d = r / 6371.0088, p1 = (lat * Math.PI) / 180, l1 = (lon * Math.PI) / 180;
-  const pts = [];
-  let prev = null;
-  for (let i = 0; i <= 96; i++) {
-    const b = (i / 96) * 2 * Math.PI;
-    const p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(b));
-    let l2 = l1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
-    let x = (l2 * 180) / Math.PI;
-    if (prev != null) while (x - prev > 180) x -= 360;
-    if (prev != null) while (prev - x > 180) x += 360;
-    prev = x;
-    pts.push(`${x.toFixed(2)},${(-(p2 * 180) / Math.PI).toFixed(2)}`);
-  }
-  return 'M' + pts.join('L') + 'Z';
-}
+const circle = (lat, lon, r) => 'M' + ringPoints(lat, lon, r).map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join('L') + 'Z';
 
 function drawMap() {
-  const svg = el('svg', { viewBox: VIEW.join(' '), role: 'img' });
-  el('rect', { class: 'sea', x: VIEW[0], y: VIEW[1], width: VIEW[2], height: VIEW[3] }, svg);
-  if (WORLD) el('path', { class: 'land', d: WORLD.land }, svg);
   const list = events(), at = here();
-  const inside = at ? new Set(nearEvents(list, at, state.r).map((e) => e.id)) : null;
+  const near = at ? nearEvents(list, at, state.r) : null;
+  const inside = near ? new Set(near.map((e) => e.id)) : null;
+  // Zoomed to the circle, and to the nearest quake when the circle is empty.
+  const V = at && !worldView ? mapView(at, state.r, near.length ? null : nearest(list, at)) : WORLD_VIEW;
+  const k = dotScale(V), wraps = V[0] < -180 || V[0] + V[2] > 180;
+  const svg = el('svg', { viewBox: V.map((v) => +v.toFixed(3)).join(' '), role: 'img' });
+  el('rect', { class: 'sea', x: V[0], y: V[1], width: V[2], height: V[3] }, svg);
+  if (WORLD) el('path', { class: 'land', d: WORLD.land }, svg);
   const g = el('g', { id: 'qs' }, svg);
   for (const e of list.slice().sort((a, b) => a.mag - b.mag)) {
     const c = el('circle', { class: `q b${band(e.mag)}${inside && !inside.has(e.id) ? ' out' : ''}`,
-      cx: e.lon.toFixed(2), cy: (-e.lat).toFixed(2), r: dotR(e.mag).toFixed(2), 'data-id': e.id }, g);
+      cx: e.lon.toFixed(2), cy: (-e.lat).toFixed(2), r: (dotR(e.mag) * k).toFixed(3), 'data-id': e.id }, g);
     el('title', {}, c).textContent = `M${fmtMag(e.mag)} · ${e.place} · ${ago(e.time, Date.now())}`;
+  }
+  // A view across the antimeridian draws the world again beside itself, land under quakes.
+  // Real copies, not <use>: the page's CSS does not reach into a <use> (its land drew black).
+  if (wraps) for (const dx of [-360, 360]) {
+    const land = svg.querySelector('.land');
+    if (land) { const c = land.cloneNode(); c.removeAttribute('id'); c.setAttribute('transform', `translate(${dx} 0)`); g.before(c); }
+    const q = g.cloneNode(true); q.removeAttribute('id'); q.setAttribute('class', 'wrap'); q.setAttribute('transform', `translate(${dx} 0)`); svg.append(q);
   }
   if (at) {
     const d = circle(at.lat, at.lon, state.r);
     for (const dx of [-360, 0, 360]) el('path', { class: 'ring', d, transform: `translate(${dx} 0)` }, svg);
-    el('circle', { class: 'here', cx: at.lon.toFixed(2), cy: (-at.lat).toFixed(2), r: 1.6 }, svg);
+    for (const dx of wraps ? [-360, 0, 360] : [0]) el('circle', { class: 'here', cx: (at.lon + dx).toFixed(2), cy: (-at.lat).toFixed(2), r: (1.6 * k).toFixed(3) }, svg);
   }
-  svg.setAttribute('aria-label', `World map of ${fmt(list.length)} earthquakes in ${SPAN[state.period]}` +
+  $('zoom').hidden = !at;
+  $('zoom').textContent = worldView ? 'Zoom to the circle' : 'Show the whole world';
+  svg.setAttribute('aria-label', `${V[2] === WORLD_VIEW[2] ? 'World map' : 'Map'} of ${fmt(list.length)} earthquakes in ${SPAN[state.period]}` +
     (at ? `, with a ${state.r} km circle around ${hereLabel()}` : ''));
   svg.addEventListener('click', (ev) => {
     const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
@@ -263,7 +260,7 @@ function drawAll() { if (ever()) loadHistory(); drawStats(); drawMap(); drawList
 // ---- choosing a place -----------------------------------------------------------------
 
 function setPoint(at, name = null) {
-  state.at = at; state.near = name; state.shown = PAGE;
+  state.at = at; state.near = name; state.shown = PAGE; worldView = false;
   $('near').value = name || (at ? at.label : '');
   closeOpts();
   drawAll();
@@ -360,6 +357,7 @@ function wire() {
     const p = e.target.closest('button[data-p]')?.dataset.p;
     if (p && (PERIODS[p] || p === HISTORY) && p !== state.period) { state.period = p; state.shown = PAGE; drawAll(); }
   });
+  $('zoom').addEventListener('click', () => { worldView = !worldView; drawMap(); });
   $('more').addEventListener('click', () => { state.shown += PAGE * 4; drawList(); });
 }
 

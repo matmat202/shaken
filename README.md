@@ -9,7 +9,8 @@ many reached M5 and M6, and the biggest.
 Then the question people actually ask: **what shook near me?** Type a town, use your
 location, or tap anywhere on the map, and pick a radius from 100 to 2,500 km. The list
 shows the biggest (or the latest) quakes inside the circle, with how far away each one was.
-When nothing is in range, it tells you how far away the nearest one was. The link keeps your
+When nothing is in range, it tells you how far away the nearest one was. The map zooms to your circle
+(and out far enough to show that nearest one); **Show the whole world** zooms back out. The link keeps your
 choice, so `?near=Tokyo, Japan&p=month` opens on it.
 
 A month is too short for most places: within 500 km, more than half the world's people get

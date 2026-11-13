@@ -57,6 +57,7 @@ a{color:var(--accent)}
 .legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--ink-2);margin:6px 4px 2px;align-items:center}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
 .hint{font-size:12px;color:var(--ink-2);margin:2px 4px 0}
+#map .zoom{font:inherit;font-size:12px;margin:6px 4px 0;padding:4px 10px;border-radius:6px;border:1px solid var(--line);background:none;color:inherit;cursor:pointer}
 .near{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin:14px 0 0}
 .nearbox{position:relative}
 input,select,.btn{font:inherit;font-size:15px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);width:100%}
@@ -118,6 +119,7 @@ input,select,textarea{font-size:16px!important}
     <span><i style="background:var(--m2)"></i>5s</span><span><i style="background:var(--m3)"></i>6s</span><span><i style="background:var(--m4)"></i>7+</span>
   </div>
   <p class="hint" id="hint">Tap the map anywhere to see what shook near that spot.</p>
+  <button type="button" class="zoom" id="zoom" hidden>Show the whole world</button>
 </div>
 
 <div class="near" id="nearRow">

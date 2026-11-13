@@ -275,5 +275,44 @@ ok('the Panama M7.7 is one of them', oafIds.includes('us6000u18k'));
 eq('a feed without types flags none', L.parseFeed(fake).events.filter((e) => e.oaf).length, 0);
 eq('types without oaf is not oaf', L.parseFeed({ features: [F('z', 5, 1, 0, 0, { types: ',origin,oafx,' })] }).events[0].oaf, false);
 
+// --- the map's view ----------------------------------------------------------------------
+// Each view is checked against the ring's own points, which are checked against km(): the
+// view's box is not trusted to the geometry that built it.
+const inBox = (v, [x, y]) => x >= v[0] && x <= v[0] + v[2] && y >= v[1] && y <= v[1] + v[3];
+eq('no point, the world', L.mapView(null, 500), [-180, -85, 360, 160]);
+for (const [name, lat, lon, r] of [['Palo Alto', 37.44, -122.14, 500], ['Reykjavik', 64.15, -21.94, 2500], ['Suva', -18.14, 178.44, 1000], ['Quito', -0.23, -78.52, 100], ['Ushuaia', -54.8, -68.3, 1000]]) {
+  const ring = L.ringPoints(lat, lon, r);
+  ok(`${name}: the ring is ${r} km out`, ring.every(([x, y]) => Math.abs(L.km(lat, lon, -y, x) - r) < 0.5));
+  const v = L.mapView({ lat, lon }, r);
+  // The map itself stops at 85°N: a ring that runs above it is held only as far as the map goes.
+  ok(`${name}: the view holds the whole ring`, ring.every(([x, y]) => inBox(v, [x, Math.min(Math.max(y, -85), 75)])), JSON.stringify(v));
+  near(`${name}: the view keeps the 9:4 shape`, v[2] / v[3], 2.25, 1e-9);
+  ok(`${name}: the view is zoomed in`, v[2] < 360, JSON.stringify(v));
+  ok(`${name}: the circle is not lost in it`, v[2] <= Math.max(14, 1.31 * (Math.max(...ring.map((p) => p[0])) - Math.min(...ring.map((p) => p[0]))), 1.31 * 2.25 * (Math.max(...ring.map((p) => p[1])) - Math.min(...ring.map((p) => p[1])))) + 1e-9, JSON.stringify(v));
+  ok(`${name}: within 85°N–75°S`, v[1] >= -85 && v[1] + v[3] <= 75 + 1e-9, JSON.stringify(v));
+}
+const suva = L.mapView({ lat: -18.14, lon: 178.44 }, 1000);
+ok('Suva: the view runs past 180°, not cut at it', suva[0] + suva[2] > 181 && suva[0] < 178, JSON.stringify(suva));
+near('Palo Alto: centred on it', L.mapView({ lat: 37.44, lon: -122.14 }, 500)[0] + L.mapView({ lat: 37.44, lon: -122.14 }, 500)[2] / 2, -122.14, 0.05);
+near('Palo Alto 500: 1.3x the ring\'s height, in 9:4', L.mapView({ lat: 37.44, lon: -122.14 }, 500)[2], ((2 * 500) / 111.195) * 1.3 * 2.25, 0.02);
+eq('100 km: never narrower than 14°', L.mapView({ lat: -0.23, lon: -78.52 }, 100)[2], 14);
+eq('a circle over the North Pole, the world', L.mapView({ lat: 78.2, lon: 15.6 }, 1500), [-180, -85, 360, 160]);
+const ush = L.mapView({ lat: -54.8, lon: -68.3 }, 1000);
+ok('Ushuaia: clamped so the view does not run off the bottom', ush[1] + ush[3] <= 75 + 1e-9);
+// Nothing within 500 km of London: the view widens to take in the nearest, in Poland.
+const lon5 = L.mapView({ lat: 51.51, lon: -0.13 }, 500), lonP = L.mapView({ lat: 51.51, lon: -0.13 }, 500, { lat: 50.9, lon: 16.4 });
+ok('London: Poland is outside the plain view', !inBox(lon5, [16.4, -50.9]));
+ok('London: and inside the view that includes it', inBox(lonP, [16.4, -50.9]) && L.ringPoints(51.51, -0.13, 500).every((p) => inBox(lonP, p)), JSON.stringify(lonP));
+const tonga = L.mapView({ lat: -18.14, lon: 178.44 }, 250, { lat: -15.0, lon: -173.8 });
+ok('across the antimeridian, the nearest is taken the short way', inBox(tonga, [-173.8 + 360, 15.0]) && tonga[2] < 40, JSON.stringify(tonga));
+ok('from the far west, the nearest in the far east is taken the short way', inBox(L.mapView({ lat: -16, lon: -179 }, 250, { lat: -17, lon: 175 }), [175 - 360, 17]));
+// Around a pole, atan2 wraps: the drawn ring must still be one unbroken line.
+for (const [lat, lon] of [[78.2, 15.6], [-80, -120], [85, 170]]) {
+  const ring = L.ringPoints(lat, lon, 1500);
+  ok(`ring around the pole from ${lat},${lon} never jumps across the map`, ring.every((p, i) => !i || Math.abs(p[0] - ring[i - 1][0]) < 40));
+}
+eq('dots at world scale', L.dotScale([-180, -85, 360, 160]), 1);
+near('dots in a 36° view are a third the size', L.dotScale([0, 0, 36, 16]), Math.sqrt(0.1), 1e-12);
+
 console.log(`${fail ? 'FAILED' : 'ok'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
