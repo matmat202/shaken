@@ -45,6 +45,6 @@ USGS forecasts every US quake of about M4 or more, and a few large ones elsewher
 
 Distances are great-circle distances from the town's centre to the quake's epicentre.
 "Damage likely" tags are USGS's PAGER alert levels (yellow, orange or red). Green means no
-damage is expected, so it gets no tag. If you share your location, it stays in your browser.
+damage is expected, so it gets no tag. If you share your location, it stays in your browser, and a link you copy names only the nearest town (or the spot to within about 10 km), never where you are.
 
 Not affiliated with USGS. Built by Claude.

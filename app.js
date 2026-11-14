@@ -4,6 +4,7 @@ import {
   band, dotR, fmtMag, ago, kmLabel, latLonLabel, matchPlaces, placeLabel, placeByLabel, P,
   encodeState, decodeState, HISTORY, HIST_LIMIT, HIST_MAGS, historyURLs, feltHere, FELT_WORDS,
   DETAIL, forecastURL, aftershockOutlook, pct, ringPoints, mapView, dotScale, WORLD_VIEW,
+  nearestPlace, coarse,
 } from './quake-logic.js';
 
 const FEED = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_month.geojson';
@@ -37,8 +38,11 @@ const here = () => state.at;
 const hereLabel = () => state.near || (state.at && state.at.label) || '';
 
 function sync() {
-  const at = state.near ? null : state.at;
-  history.replaceState(null, '', location.pathname + encodeState({ ...state, at }));
+  let at = state.near ? null : state.at, near = state.near;
+  // The browser's own position never goes into the address bar, which is what gets shared:
+  // the nearest town does, or the point to 0.1°.
+  if (at && at.mine) { near = at.town; at = at.town ? null : coarse(at); }
+  history.replaceState(null, '', location.pathname + encodeState({ ...state, near, at }));
 }
 
 // ---- map --------------------------------------------------------------------------
@@ -340,16 +344,29 @@ function wire() {
     const i = e.target.closest('li[data-i]')?.dataset.i;
     if (i != null && opts[i]) pick(opts[i]);
   });
+  const HINT = $('hint').textContent;
   $('locate').addEventListener('click', () => {
     if (!navigator.geolocation) { $('hint').textContent = 'This browser cannot share its location. Type a town or tap the map.'; return; }
     $('locate').textContent = 'Locating…';
     navigator.geolocation.getCurrentPosition((pos) => {
       $('locate').textContent = 'Use my location';
-      const lat = pos.coords.latitude, lon = pos.coords.longitude;
-      setPoint({ lat, lon, label: 'your location' });
-    }, () => {
+      $('hint').textContent = HINT;
+      const at = { lat: pos.coords.latitude, lon: pos.coords.longitude, label: 'your location', mine: true, town: null };
+      setPoint(at);
+      // Name the nearest town once the list is in; the list stays exact to the real position.
+      loadPlaces().then((pl) => {
+        const n = state.at === at && nearestPlace(pl, at.lat, at.lon);
+        if (!n) return;
+        const was = at.label;
+        at.town = placeLabel(n.place); at.label = `you, near ${n.place[P.NAME]}`;
+        if ($('near').value === was) $('near').value = at.label; // not over a town being typed
+        drawAll();
+      }).catch(() => {});
+    }, (err) => {
       $('locate').textContent = 'Use my location';
-      $('hint').textContent = 'Location was not shared. Type a town or tap the map instead.';
+      $('hint').textContent = err && err.code === 1
+        ? 'Location was not shared. Type a town or tap the map instead.'
+        : 'Could not find your location just now. Type a town or tap the map instead.';
     }, { maximumAge: 600e3, timeout: 15e3 });
   });
   for (const r of RADII) { const o = document.createElement('option'); o.value = r; o.textContent = `${fmt(r)} km`; $('km').append(o); }

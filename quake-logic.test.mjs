@@ -91,6 +91,14 @@ eq('narrowed by country', L.matchPlaces(pl, 'spri, south').map(L.placeLabel), ['
 eq('accents and case fold', L.matchPlaces(pl, 'SAO PAU').map((p) => p[0]), ['São Paulo']);
 eq('letters NFD keeps whole', ['Tromsø', 'Łódź', 'Straße'].map(L.fold), ['tromso', 'lodz', 'strasse']);
 eq('nothing typed', L.matchPlaces(pl, '  '), []);
+// The browser's position becomes the nearest town for the shared link; listed order (biggest first) must not win.
+eq('nearest town, not the biggest', L.placeLabel(L.nearestPlace(pl, 39.7, -89.7).place), 'Springfield, Illinois, United States');
+near('nearest town: its distance', L.nearestPlace(pl, 39.7, -89.7).km, L.km(39.7, -89.7, 39.8, -89.6), 1e-9);
+// 0.4° of latitude is 44.5 km, 0.5° is 55.6 km: either side of the 50 km bar.
+eq('a town 44 km off is near, 56 km is not', [!!L.nearestPlace(pl, 39.4, -89.6), L.nearestPlace(pl, 39.3, -89.6)], [true, null]);
+eq('mid-ocean has no town', L.nearestPlace(pl, 0, -140), null);
+eq('coarse rounds to 0.1°, both signs', L.coarse({ lat: 36.9749, lon: -122.0349 }), { lat: 37, lon: -122 });
+eq('coarse keeps a tenth', L.coarse({ lat: -33.8688, lon: 151.2093 }), { lat: -33.9, lon: 151.2 });
 eq('limit', L.matchPlaces(pl, 's', 2).length, 2);
 eq('by label', L.placeByLabel(pl, 'springfield, illinois, united states'), pl[1]);
 eq('unknown label', L.placeByLabel(pl, 'Atlantis'), null);
@@ -136,6 +144,7 @@ if (existsSync(placesFile)) {
   eq('shipped: biggest first', P.every((p, i) => !i || P[i - 1][5] >= p[5]), true);
   eq('shipped: palo alto', L.matchPlaces(P, 'palo alto').map(L.placeLabel)[0], 'Palo Alto, California, United States');
   eq('shipped: the biggest Springfield first', L.placeLabel(L.matchPlaces(P, 'springfield')[0]), 'Springfield, Missouri, United States');
+  eq('shipped: a phone in Santa Cruz is near Santa Cruz', L.placeLabel(L.nearestPlace(P, 36.9741, -122.0308).place), 'Santa Cruz, California, United States');
   eq('shipped: tokyo', L.placeLabel(L.matchPlaces(P, 'tokyo')[0]), 'Tokyo, Japan');
   const lbl = 'Palo Alto, California, United States';
   eq('shipped: label round trip', L.placeLabel(L.placeByLabel(P, lbl)), lbl);

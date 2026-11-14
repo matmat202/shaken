@@ -294,6 +294,17 @@ export function placeByLabel(places, label) {
   return places.find((p) => fold(placeLabel(p)) === f) || null;
 }
 
+// The browser's own position is the user's home to within metres. A shared link names the
+// nearest town of 15,000+ instead, if one is within NEAR_TOWN_KM; otherwise it carries the
+// point rounded to 0.1° (~11 km), which no 100 km+ circle can tell from the real one.
+export const NEAR_TOWN_KM = 50;
+export function nearestPlace(places, lat, lon) {
+  let best = null, bd = Infinity;
+  for (const p of places) { const d = km(lat, lon, p[P.LAT], p[P.LON]); if (d < bd) { bd = d; best = p; } }
+  return best && bd <= NEAR_TOWN_KM ? { place: best, km: bd } : null;
+}
+export const coarse = (at) => ({ lat: Math.round(at.lat * 10) / 10, lon: Math.round(at.lon * 10) / 10 });
+
 // ---- URL state ------------------------------------------------------------------
 // ?p=month&near=Palo Alto, California, United States&r=250&sort=new  (p=ever: since 1900)
 // ?at=37.44,-122.14 for a point picked on the map or from the browser's location.
