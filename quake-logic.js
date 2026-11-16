@@ -221,6 +221,18 @@ export function dotScale(view, rs = []) {
 
 export function fmtMag(m) { return m.toFixed(1); }
 
+// ---- staying live -----------------------------------------------------------------------
+// USGS regenerates the feed every minute, but the page fetched it once: a tab left open, or
+// one a phone restores the next morning, went on showing that one copy, "31 min ago" and all.
+// The month feed is 173 KB gzipped (2026-11-16), so it is fetched again whole, which also
+// picks up revised and deleted quakes, every REFRESH_MS while the tab is in view, and at once
+// when a hidden tab comes back after that long. A clock that went backwards counts as due.
+export const REFRESH_MS = 5 * 60e3;
+export function refreshDue(fetchedAt, now, hidden) {
+  if (hidden) return false;
+  return fetchedAt == null || now < fetchedAt || now - fetchedAt >= REFRESH_MS;
+}
+
 export function ago(t, now) {
   const s = Math.max(0, (now - t) / 1000);
   if (s < 90) return 'just now';

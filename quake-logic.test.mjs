@@ -329,5 +329,15 @@ ok('and are drawn smaller than the square root would', cs < Math.sqrt(26 / 360))
 eq('a crowd never shrinks dots below their world size', L.dotScale([0, 0, 36, 16], Array(5000).fill(3)), 0.1);
 eq('dots at world scale, crowded or not', L.dotScale([-180, -85, 360, 160], Array(5000).fill(3)), 1);
 
+// Staying live: refetch every 5 min in view, never while hidden, at once if never fetched.
+{ const t = 1.79e12, M = 60e3;
+  eq('refresh: never fetched is due', L.refreshDue(null, t, false), true);
+  eq('refresh: 4 min 59 s on is not due', L.refreshDue(t, t + 5 * M - 1000, false), false);
+  eq('refresh: 5 min on is due', L.refreshDue(t, t + 5 * M, false), true);
+  eq('refresh: a day on is due', L.refreshDue(t, t + 1440 * M, false), true);
+  eq('refresh: a hidden tab waits however stale', L.refreshDue(t, t + 1440 * M, true), false);
+  eq('refresh: a clock that went back is due', L.refreshDue(t, t - M, false), true);
+  eq('refresh: every 5 minutes', L.REFRESH_MS, 5 * M); }
+
 console.log(`${fail ? 'FAILED' : 'ok'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

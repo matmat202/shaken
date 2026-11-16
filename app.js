@@ -4,7 +4,7 @@ import {
   band, dotR, fmtMag, ago, kmLabel, latLonLabel, matchPlaces, placeLabel, placeByLabel, P,
   encodeState, decodeState, HISTORY, HIST_LIMIT, HIST_MAGS, historyURLs, feltHere, FELT_WORDS,
   DETAIL, forecastURL, aftershockOutlook, pct, ringPoints, mapView, dotScale, WORLD_VIEW,
-  nearestPlace, coarse,
+  nearestPlace, coarse, refreshDue,
 } from './quake-logic.js';
 
 const FEED = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_month.geojson';
@@ -382,37 +382,78 @@ function wire() {
 
 // ---- start ----------------------------------------------------------------------------
 
+async function fetchFeed() {
+  const r = await fetch(FEED, { cache: 'no-cache' });
+  if (!r.ok) throw new Error(r.status);
+  return parseFeed(await r.json());
+}
+
+// How old the copy on screen is, said again on every tick, so a feed that stopped answering
+// shows its age instead of looking current.
+function stamp() {
+  if (FEEDDOC && FEEDDOC.generated) $('gen').textContent = `; this copy was generated ${ago(FEEDDOC.generated, Date.now())}`;
+}
+
+// ---- staying live: the feed again every few minutes, while the tab is in view -------------
+
+let fetchedAt = null, refreshing = false, pending = false, opened = null;
+// Someone typing a town or reading an aftershock forecast keeps what they are looking at;
+// the new copy is drawn on the first tick after they stop.
+const busy = () => document.activeElement === $('near') || !!document.querySelector('#list .after');
+function redrawIfIdle() {
+  if (!pending || busy()) return;
+  pending = false;
+  if (!ever()) { drawStats(); drawMap(); drawList(); }
+}
+async function tick() {
+  stamp();
+  redrawIfIdle();
+  if (refreshing || !refreshDue(fetchedAt, Date.now(), document.hidden)) return;
+  refreshing = true;
+  try {
+    const doc = await fetchFeed();
+    fetchedAt = Date.now();
+    FEEDDOC = doc; ALL = doc.events;
+    if (opened) { const go = opened; opened = null; await go(); } else { pending = true; redrawIfIdle(); }
+    stamp();
+  } catch { /* the copy on screen stays, and says how old it is */ } finally { refreshing = false; }
+}
+
 async function main() {
   const want = decodeState(location.search);
   Object.assign(state, { period: want.period, r: want.r, sort: want.sort });
   if (want.at) state.at = { ...want.at, label: latLonLabel(want.at.lat, want.at.lon) };
   wire();
   const worldP = fetch('data/world.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  let doc;
+  // What the page does once it has a feed: the first time, or when a failed first ask is
+  // answered on a later tick.
+  const first = async () => {
+    WORLD = await worldP;
+    if (want.near) {
+      $('near').value = want.near;
+      try {
+        await loadPlaces();
+        const p = placeByLabel(PLACES, want.near);
+        if (p) { pick(p); return; }
+        drawAll(); onNearInput(); // an unknown town opens its suggestions instead
+        return;
+      } catch { /* the box says why when it is next used */ }
+    }
+    if (state.at) $('near').value = state.at.label;
+    drawAll();
+  };
+  setInterval(tick, 60e3);
+  document.addEventListener('visibilitychange', tick);
   try {
-    const r = await fetch(FEED, { cache: 'no-cache' });
-    if (!r.ok) throw new Error(r.status);
-    doc = await r.json();
+    FEEDDOC = await fetchFeed(); ALL = FEEDDOC.events; fetchedAt = Date.now();
   } catch {
     $('sMax').textContent = 'Could not reach the USGS feed.';
-    $('sMaxSub').textContent = 'Try reloading in a minute.';
+    $('sMaxSub').textContent = 'Trying again every minute.';
     WORLD = await worldP; drawMap();
+    opened = first; // fetchedAt is still null, so the next tick asks again
     return;
   }
-  FEEDDOC = parseFeed(doc); ALL = FEEDDOC.events;
-  WORLD = await worldP;
-  if (FEEDDOC.generated) $('gen').textContent = `; this copy was generated ${ago(FEEDDOC.generated, Date.now())}`;
-  if (want.near) {
-    $('near').value = want.near;
-    try {
-      await loadPlaces();
-      const p = placeByLabel(PLACES, want.near);
-      if (p) { pick(p); return; }
-      drawAll(); onNearInput(); // an unknown town opens its suggestions instead
-      return;
-    } catch { /* the box says why when it is next used */ }
-  }
-  if (state.at) $('near').value = state.at.label;
-  drawAll();
+  stamp();
+  await first();
 }
 main();
