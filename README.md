@@ -27,6 +27,11 @@ it was issued). It also shows the most likely number of M3+ aftershocks, with a 
 USGS forecasts every US quake of about M4 or more, and a few large ones elsewhere (about
 140 a year).
 
+**The story** (<https://matmat202.github.io/shaken/story/>): 19% of the people in towns of
+15,000+ live within 100 km of where an M6+ struck from 1973 to 2025. Slide the same quakes
+east or west and the share falls to a median of 10%, though the share of land near them doesn't
+change. Built by `build_story.py` from frozen USGS ComCat data (`data/m6-1973-2025.csv`).
+
 ## Where the data comes from
 
 - **Earthquakes:** the [USGS real-time GeoJSON feed](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php)

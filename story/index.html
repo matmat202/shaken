@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One in five lives near a big quake · Shaken, a story</title>
+<meta name="description" content="A scrolling story from Shaken: one in five people in the world's towns of 15,000 or more lives within 100 km of where an M6+ earthquake struck since 1973. Slide the same quakes east or west and the share falls to about one in ten. Big quakes don't favour land; on land, they fall where people are.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="plot" aria-hidden="true"></div>
+<p id="err" role="alert"></p>
+<main>
+
+<section class="step" data-step="quakes"><div>
+  <p class="kicker">Shaken · a story</p>
+  <h1>One in five lives near a big quake</h1>
+  <p>These are the <b data-fact="n_quakes"></b> earthquakes of magnitude 6 or more that USGS
+  recorded from <b data-fact="years"></b>, one dot each. Any one of them can do real damage to a
+  town close by.</p>
+  <p>Most of them are under the sea, along the edges of the plates. Who lives near the ones that aren't?</p>
+  <p class="small">Scroll ↓</p>
+</div></section>
+
+<section class="step" data-step="people"><div>
+  <p class="kicker">Chapter 1 · The people</p>
+  <h2>Tokyo, Istanbul, Lima</h2>
+  <p>Count everyone who lives in a town of 15,000 or more. <b data-fact="p"></b> of them live
+  within <b data-fact="R"></b> of where one of these quakes struck. That's
+  <span class="w">about one in five</span>.</p>
+  <p>On the map are the <b data-fact="n_big"></b> towns of <b data-fact="big"></b> or more,
+  red when a quake struck within <b data-fact="R"></b>. <b data-fact="n_big_near"></b> of them
+  are. Shanghai, the biggest of all, is not.</p>
+  <p class="small"><span class="k near">within 100 km of an M6+</span> <span class="k far">not</span></p>
+</div></section>
+
+<section class="step" data-step="land"><div>
+  <p class="kicker">Chapter 2 · Is that a lot?</p>
+  <h2>Slide every quake sideways</h2>
+  <p>To find out, move the whole map of quakes east or west by <b data-fact="slide"></b> at a
+  time, all the way round. Each slide keeps the same quakes at the same latitudes, in the same
+  pattern, just in the wrong places. Slides of <b data-fact="near"></b> or more are far enough
+  off to tell us what chance alone gives. There are <b data-fact="n_far"></b> of them.</p>
+  <p>First, land. <b data-fact="land"></b> of the world's land lies within <b data-fact="R"></b>
+  of a real quake. The slides give a median of <b data-fact="land_med"></b>, and
+  <b data-fact="beaten_land"></b> of them give more. <span class="w">Big quakes don't favour land.</span></p>
+</div></section>
+
+<section class="step" data-step="slide"><div>
+  <p class="kicker">Chapter 3 · People</p>
+  <h2>On land, they fall where people are</h2>
+  <p>Now people. The real map puts <b data-fact="p"></b> of them within <b data-fact="R"></b> of a
+  quake. The slides give a median of <b data-fact="p_med"></b>. The real map gives
+  <span class="w">nearly twice</span> what chance does.</p>
+  <p><span class="w">Only <b data-fact="beaten"></b></span> of the <b data-fact="n_far"></b> slides
+  do better, and they are the smallest ones, <b data-fact="beaten_by"></b>, which move the western
+  Pacific's quakes onto the cities of eastern China.</p>
+</div></section>
+
+<section class="step" data-step="nochina"><div>
+  <p class="kicker">Chapter 4 · Is it one country?</p>
+  <h2>Leave China out, and it gets stronger</h2>
+  <p>A fifth of these people live in China, so leave them out. The real map then puts
+  <b data-fact="pCN"></b> of everyone else near a quake. The highest any slide gives is
+  <b data-fact="pCN_max"></b>. <span class="w">Not one</span> slide beats the real map.</p>
+  <p>Leave Japan out instead: <b data-fact="pJP"></b>, against a median slide of
+  <b data-fact="pJP_med"></b>. <b data-fact="beatenJP"></b> of <b data-fact="n_far"></b> beat that.</p>
+</div></section>
+
+<section class="step" data-step="people"><div>
+  <p class="kicker">Coda · Why</p>
+  <h2>The fault is the reason the town is there</h2>
+  <p>The geologist James Jackson calls it a <a href="https://doi.org/10.1098/rsta.2006.1805">fatal
+  attraction</a>. Faults lift mountains, and mountain fronts hold springs and rivers. Faults also
+  open the passes trade routes follow. Villages grew there, and some have become
+  megacities, most of them only in the last fifty years.</p>
+  <p>To see what shook near you, today or since 1900, <a href="../">Shaken</a> maps it live from USGS.</p>
+  <p class="small">Data: USGS ComCat, every event typed earthquake with magnitude 6 or more,
+  1973–2025 (public domain). GeoNames cities15000, every town over 15,000 people plus capitals
+  (CC BY 4.0). Natural Earth 1:110m land, on a half-degree grid weighted by area, Antarctica
+  left out. Distances are great-circle distances, town centre to epicentre. The build script is
+  <a href="https://github.com/matmat202/shaken/blob/main/story/build_story.py">in the repository</a>.</p>
+</div></section>
+
+</main>
+<script type="module" src="story.js"></script>
+</body>
+</html>
