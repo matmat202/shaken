@@ -84,7 +84,8 @@ function drawMap() {
     for (const dx of wraps ? [-360, 0, 360] : [0]) el('circle', { class: 'here', cx: (at.lon + dx).toFixed(2), cy: (-at.lat).toFixed(2), r: (1.6 * k).toFixed(3) }, svg);
   }
   const pm = pinned && pinAt(pinned, V, dotR(pinned.mag) * k);
-  if (pm) el('circle', { class: 'pin', cx: pm.cx.toFixed(2), cy: pm.cy.toFixed(2), r: pm.r.toFixed(3), 'data-id': pinned.id }, svg);
+  // Copies a world away too: a quake at the map's edge (Fiji, Tonga) rings on both sides.
+  if (pm) for (const dx of [0, -360, 360]) el('circle', { class: 'pin', cx: (pm.cx + dx).toFixed(2), cy: pm.cy.toFixed(2), r: pm.r.toFixed(3), ...(dx ? {} : { 'data-id': pinned.id }) }, svg);
   $('pinNote').hidden = !pinned;
   if (pinned) $('pinText').textContent = `Marked: M${fmtMag(pinned.mag)} · ${pinned.place}`;
   for (const b of document.querySelectorAll('#list button.mag')) b.setAttribute('aria-pressed', String(b.dataset.id === pin));
