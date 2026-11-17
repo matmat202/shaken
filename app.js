@@ -4,7 +4,7 @@ import {
   band, dotR, fmtMag, ago, kmLabel, latLonLabel, matchPlaces, placeLabel, placeByLabel, P,
   encodeState, decodeState, HISTORY, HIST_LIMIT, HIST_MAGS, historyURLs, feltHere, FELT_WORDS,
   DETAIL, forecastURL, aftershockOutlook, pct, ringPoints, mapView, dotScale, WORLD_VIEW,
-  nearestPlace, coarse, refreshDue,
+  nearestPlace, coarse, refreshDue, pinAt,
 } from './quake-logic.js';
 
 const FEED = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_month.geojson';
@@ -19,6 +19,8 @@ const fmt = (n) => n.toLocaleString('en-US');
 const state = { period: 'week', near: null, at: null, r: DEFAULT_KM, sort: 'big', shown: PAGE };
 // The map zooms to the circle once there is one; this shows the whole world instead.
 let worldView = false;
+// The quake a row's badge asked to see on the map (its id), or null. Dropped once it leaves the list.
+let pin = null;
 let FEEDDOC = null, ALL = [], WORLD = null, PLACES = null, placesP = null;
 // Since 1900 is asked of the catalogue per place, radius and sort: {key, status, events, counts}.
 let HIST = { key: null, status: 'idle', events: [], counts: [] };
@@ -62,7 +64,9 @@ function drawMap() {
   el('rect', { class: 'sea', x: V[0], y: V[1], width: V[2], height: V[3] }, svg);
   if (WORLD) el('path', { class: 'land', d: WORLD.land }, svg);
   const g = el('g', { id: 'qs' }, svg);
-  for (const e of list.slice().sort((a, b) => a.mag - b.mag)) {
+  const pinned = pin && list.find((e) => e.id === pin);
+  if (pin && !pinned) pin = null;
+  for (const e of list.slice().sort((a, b) => (a === pinned) - (b === pinned) || a.mag - b.mag)) {
     const c = el('circle', { class: `q b${band(e.mag)}${inside && !inside.has(e.id) ? ' out' : ''}`,
       cx: e.lon.toFixed(2), cy: (-e.lat).toFixed(2), r: (dotR(e.mag) * k).toFixed(3), 'data-id': e.id }, g);
     el('title', {}, c).textContent = `M${fmtMag(e.mag)} · ${e.place} · ${ago(e.time, Date.now())}`;
@@ -79,6 +83,11 @@ function drawMap() {
     for (const dx of [-360, 0, 360]) el('path', { class: 'ring', d, transform: `translate(${dx} 0)` }, svg);
     for (const dx of wraps ? [-360, 0, 360] : [0]) el('circle', { class: 'here', cx: (at.lon + dx).toFixed(2), cy: (-at.lat).toFixed(2), r: (1.6 * k).toFixed(3) }, svg);
   }
+  const pm = pinned && pinAt(pinned, V, dotR(pinned.mag) * k);
+  if (pm) el('circle', { class: 'pin', cx: pm.cx.toFixed(2), cy: pm.cy.toFixed(2), r: pm.r.toFixed(3), 'data-id': pinned.id }, svg);
+  $('pinNote').hidden = !pinned;
+  if (pinned) $('pinText').textContent = `Marked: M${fmtMag(pinned.mag)} · ${pinned.place}`;
+  for (const b of document.querySelectorAll('#list button.mag')) b.setAttribute('aria-pressed', String(b.dataset.id === pin));
   $('zoom').hidden = !at;
   $('zoom').textContent = worldView ? 'Zoom to the circle' : 'Show the whole world';
   svg.setAttribute('aria-label', `${V[2] === WORLD_VIEW[2] ? 'World map' : 'Map'} of ${fmt(list.length)} earthquakes in ${SPAN[state.period]}` +
@@ -152,7 +161,12 @@ const OLD = 300 * 86400e3;
 
 function row(e) {
   const li = document.createElement('li');
-  const m = document.createElement('div'); m.className = `mag b${band(e.mag)}`; m.textContent = fmtMag(e.mag);
+  // The badge marks this quake's dot on the map and brings the map into view: on a phone
+  // the map is a screen or more above the row, and its dots are a pixel or two across.
+  const m = document.createElement('button'); m.type = 'button'; m.className = `mag b${band(e.mag)}`; m.textContent = fmtMag(e.mag);
+  m.dataset.id = e.id; m.setAttribute('aria-pressed', String(e.id === pin));
+  m.setAttribute('aria-label', `M${fmtMag(e.mag)}: show on the map`); m.title = 'Show on the map';
+  m.addEventListener('click', () => showOnMap(e.id));
   const t = document.createElement('div'); t.className = 't';
   const a = document.createElement('a'); a.href = e.url; a.textContent = e.place; a.rel = 'noopener';
   t.append(a);
@@ -178,6 +192,12 @@ function row(e) {
   }
   li.append(m, t);
   return li;
+}
+
+function showOnMap(id) {
+  pin = pin === id ? null : id;
+  drawMap();
+  if (pin) $('map').scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
 }
 
 // ---- aftershock forecast, asked of USGS only when a row's button is pressed -------------
@@ -377,6 +397,7 @@ function wire() {
     if (p && (PERIODS[p] || p === HISTORY) && p !== state.period) { state.period = p; state.shown = PAGE; drawAll(); }
   });
   $('zoom').addEventListener('click', () => { worldView = !worldView; drawMap(); });
+  $('pinClear').addEventListener('click', () => { pin = null; drawMap(); });
   $('more').addEventListener('click', () => { state.shown += PAGE * 4; drawList(); });
 }
 

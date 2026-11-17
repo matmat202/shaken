@@ -339,5 +339,19 @@ eq('dots at world scale, crowded or not', L.dotScale([-180, -85, 360, 160], Arra
   eq('refresh: a clock that went back is due', L.refreshDue(t, t - M, false), true);
   eq('refresh: every 5 minutes', L.REFRESH_MS, 5 * M); }
 
+// ---- show on map: the marker sits on the copy of the quake inside the view ----------------
+{ const W = L.WORLD_VIEW, fiji = { lat: -17.8, lon: -178.1 };
+  eq('pin: world view, at the quake', [L.pinAt(fiji, W).cx, L.pinAt(fiji, W).cy], [-178.1, 17.8]);
+  near('pin: world view ring is 1/36 of the width', L.pinAt(fiji, W).r, 10, 1e-9);
+  const east = [160, 10, 40, 160 / 9];       // 160..200 E: Fiji drawn again at x 181.9
+  near('pin: across the antimeridian, the copy at +360', L.pinAt(fiji, east).cx, 181.9, 1e-9);
+  const west = [-200, 10, 40, 160 / 9];      // -200..-160: a quake at 179 E drawn at -181
+  near('pin: across the antimeridian, the copy at -360', L.pinAt({ lat: -16, lon: 179 }, west).cx, -181, 1e-9);
+  eq('pin: outside the view sideways is none', L.pinAt({ lat: -16, lon: 100 }, east), null);
+  eq('pin: outside the view north is none', L.pinAt({ lat: 40, lon: 179 }, east), null);
+  eq('pin: outside the view south is none', L.pinAt({ lat: -40, lon: 179 }, east), null);
+  near('pin: zoomed, the ring shrinks with the view', L.pinAt(fiji, east).r, 40 / 36, 1e-9);
+  near('pin: never smaller than its dot', L.pinAt(fiji, east, 2).r, 3.2, 1e-9); }
+
 console.log(`${fail ? 'FAILED' : 'ok'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

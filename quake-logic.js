@@ -219,6 +219,19 @@ export function dotScale(view, rs = []) {
   return Math.max(k, Math.min(Math.sqrt(k), fit));
 }
 
+// A row's "show on map" marker: the copy of the quake that lies inside the view (a view
+// across the antimeridian draws the world again beside itself, so lon -175 sits at x 185),
+// or null when none does. The ring is a fixed share of the view's width, so it reads as the
+// same size on screen at any zoom, and never smaller than the dot it rings.
+export const PIN_SHARE = 1 / 36;
+export function pinAt(e, view, dotr = 0) {
+  const [x0, y0, w, h] = view, y = -e.lat;
+  if (y < y0 || y > y0 + h) return null;
+  const x = [e.lon, e.lon - 360, e.lon + 360].find((v) => v >= x0 && v <= x0 + w);
+  if (x == null) return null;
+  return { cx: x, cy: y, r: Math.max(w * PIN_SHARE, dotr * 1.6) };
+}
+
 export function fmtMag(m) { return m.toFixed(1); }
 
 // ---- staying live -----------------------------------------------------------------------

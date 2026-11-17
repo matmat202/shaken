@@ -35,8 +35,9 @@ change. Built by `build_story.py` from frozen USGS ComCat data (`data/m6-1973-20
 ## Where the data comes from
 
 - **Earthquakes:** the [USGS real-time GeoJSON feed](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php)
-  of M2.5+ events over the past 30 days (public domain). It is fetched fresh every time the
-  page opens; nothing is cached here. Magnitudes and locations get revised as seismologists
+  of M2.5+ events over the past 30 days (public domain). It is fetched fresh when the
+  page opens and again every 5 minutes while it is in view (and at once when a tab left in the
+  background comes back); nothing is cached here. Magnitudes and locations get revised as seismologists
   review them, and small quakes far from any seismometer are never recorded at all. The
   coverage below M4 is much better in the US than elsewhere.
 - **Since 1900:** the [USGS ComCat catalogue](https://earthquake.usgs.gov/fdsnws/event/1/),

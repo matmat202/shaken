@@ -53,6 +53,10 @@ a{color:var(--accent)}
 #map .q.b0{fill:var(--m0)}#map .q.b1{fill:var(--m1)}#map .q.b2{fill:var(--m2)}#map .q.b3{fill:var(--m3)}#map .q.b4{fill:var(--m4)}
 #map .q.out{fill-opacity:.25}
 #map .ring{fill:none;stroke:var(--here);stroke-width:1.5;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
+#map .pin{fill:none;stroke:var(--here);stroke-width:2.5;vector-effect:non-scaling-stroke;pointer-events:none}
+#map .pinnote{display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:13px;margin:6px 4px 0}
+#map .pinnote .zoom{margin:0;flex:none}
+#map .pinnote span{min-width:0;overflow-wrap:anywhere}
 #map .here{fill:var(--here);stroke:var(--card);stroke-width:1.5;vector-effect:non-scaling-stroke}
 .legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--ink-2);margin:6px 4px 2px;align-items:center}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
@@ -74,6 +78,7 @@ input,select,.btn{font:inherit;font-size:15px;padding:9px 11px;border:1px solid 
 #note{font-size:14px;color:var(--ink-2);margin:0 2px 8px;line-height:1.45}
 ol.list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 ol.list li{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+button.mag{font-family:inherit;border:0;cursor:pointer;width:100%;line-height:inherit}
 .mag{font-weight:800;font-size:17px;text-align:center;border-radius:8px;padding:6px 0;color:#fff;font-variant-numeric:tabular-nums}
 .mag.b0{background:#8a6400}.mag.b1{background:#9c4f00}.mag.b2{background:#b23a10}.mag.b3{background:#a9241a}.mag.b4{background:#5e0d14}
 ol.list .t{min-width:0}
@@ -99,7 +104,7 @@ input,select,textarea{font-size:16px!important}
 <body>
 <main>
 <h1><span>Shaken</span></h1>
-<p class="sub" id="sub">Every earthquake of magnitude 2.5 or more that the US Geological Survey has recorded, live. Type your town to see the biggest near you.</p>
+<p class="sub" id="sub">Every earthquake of magnitude 2.5 or more that the US Geological Survey has recorded, live. Type your town to see the biggest near you. Tap a magnitude to find it on the map.</p>
 
 <div class="seg" id="periods" role="group" aria-label="Period">
   <button type="button" data-p="day" aria-pressed="false">Past day</button><button type="button" data-p="week" aria-pressed="true">Past week</button><button type="button" data-p="month" aria-pressed="false">Past month</button><button type="button" data-p="ever" aria-pressed="false">Since 1900</button>
@@ -118,6 +123,7 @@ input,select,textarea{font-size:16px!important}
     <span><i style="background:var(--m0)"></i>2.5–3.9</span><span><i style="background:var(--m1)"></i>4s</span>
     <span><i style="background:var(--m2)"></i>5s</span><span><i style="background:var(--m3)"></i>6s</span><span><i style="background:var(--m4)"></i>7+</span>
   </div>
+  <div class="pinnote" id="pinNote" role="status" hidden><span id="pinText"></span><button type="button" class="zoom" id="pinClear">Clear</button></div>
   <p class="hint" id="hint">Tap the map anywhere to see what shook near that spot.</p>
   <button type="button" class="zoom" id="zoom" hidden>Show the whole world</button>
 </div>
