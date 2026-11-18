@@ -106,12 +106,36 @@ eq('unknown label', L.placeByLabel(pl, 'Atlantis'), null);
 // --- URL state -------------------------------------------------------------------------
 eq('defaults encode to nothing', L.encodeState({ period: 'week', r: 500, sort: 'big' }), '');
 const st = { period: 'month', near: 'Palo Alto, California, United States', r: 250, sort: 'new' };
-eq('round trip by name', L.decodeState(L.encodeState(st)), { period: 'month', near: st.near, at: null, r: 250, sort: 'new' });
+eq('round trip by name', L.decodeState(L.encodeState(st)), { period: 'month', near: st.near, at: null, r: 250, sort: 'new', q: null });
 const st2 = { period: 'day', near: null, at: { lat: 37.44, lon: -122.14 }, r: 500, sort: 'big' };
-eq('round trip by point', L.decodeState(L.encodeState(st2)), st2);
+eq('round trip by point', L.decodeState(L.encodeState(st2)), { ...st2, q: null });
 eq('a radius without a place is dropped', L.encodeState({ period: 'week', r: 250 }), '');
-eq('junk falls back', L.decodeState('?p=year&r=7&sort=x&at=999,0'), { period: 'week', near: null, at: null, r: 500, sort: 'big' });
+eq('junk falls back', L.decodeState('?p=year&r=7&sort=x&at=999,0'), { period: 'week', near: null, at: null, r: 500, sort: 'big', q: null });
 eq('a name beats a point', L.decodeState('?near=Lagos&at=1,2').at, null);
+
+// ?q= -- the marked quake, so a shared link points at one quake rather than at a view.
+// The ids here are real: nc75455061 and tx2026vcnlki from the frozen feed fixture, and
+// official19060418131226300_12 (1906 San Francisco, 28 chars) from the 1900- archive --
+// the longest id found in the 2,460 measured on 2026-11-17.
+eq('a mark round trips on its own', L.decodeState(L.encodeState({ period: 'week', r: 500, sort: 'big', q: 'nc75455061' })),
+  { period: 'week', near: null, at: null, r: 500, sort: 'big', q: 'nc75455061' });
+eq('a mark alone is the only parameter', L.encodeState({ period: 'week', r: 500, sort: 'big', q: 'nc75455061' }), '?q=nc75455061');
+eq('a mark travels beside a place and a period',
+  L.decodeState(L.encodeState({ period: 'month', near: 'Palo Alto, California, United States', r: 250, sort: 'new', q: 'tx2026vcnlki' })),
+  { period: 'month', near: 'Palo Alto, California, United States', at: null, r: 250, sort: 'new', q: 'tx2026vcnlki' });
+eq('the longest real id survives, both ways',
+  L.decodeState(L.encodeState({ period: 'ever', q: 'official19060418131226300_12' })).q, 'official19060418131226300_12');
+eq('no mark means no q', L.encodeState({ period: 'week', r: 500, sort: 'big', q: null }), '');
+// A junk id is dropped at BOTH ends: it never reaches the address bar, and one typed in
+// is ignored rather than matched against the feed or echoed back out.
+const badIds = ['', '  ', 'a'.repeat(41), 'nc754/550', 'nc754 550', '<script>', 'nc754.550', '../../etc/passwd', 'nc754%2f550', 'ñc754550'];
+eq('junk ids never reach the address bar', badIds.map((b) => L.encodeState({ period: 'week', r: 500, sort: 'big', q: b })), badIds.map(() => ''));
+eq('junk ids decode to null', badIds.map((b) => L.decodeState(`?q=${encodeURIComponent(b)}`).q), badIds.map(() => null));
+eq('exactly 40 characters is in, 41 is out',
+  [L.decodeState(`?q=${'a'.repeat(40)}`).q, L.decodeState(`?q=${'a'.repeat(41)}`).q], ['a'.repeat(40), null]);
+eq('the id pattern matches every id in the frozen feed fixture and the live charset',
+  ['nc75455061', 'us7000ttbh', 'aka2026vfmqfn', 'iscgem911261', 'usp0001aq1', 'official19060418131226300_12', 'ci3319401']
+    .filter((i) => !L.QID.test(i)), []);
 
 // --- the real feed, frozen -------------------------------------------------------------
 // Counted in Python straight from the GeoJSON (2026-10-26): 1,952 features, 1,951
@@ -161,7 +185,7 @@ eq('ago in months and years', [59 * D, 61 * D, 400 * D, 23 * 30.44 * D, 25 * 30.
 eq('a 1906 quake is 120 years ago', L.ago(Date.UTC(1906, 3, 18, 13, 12), now), '120 years ago');
 eq('p=ever decodes', L.decodeState('?p=ever&near=Lagos').period, 'ever');
 eq('p=ever round trips', L.decodeState(L.encodeState({ period: 'ever', near: null, at: { lat: 37.44, lon: -122.14 }, r: 100, sort: 'big' })),
-  { period: 'ever', near: null, at: { lat: 37.44, lon: -122.14 }, r: 100, sort: 'big' });
+  { period: 'ever', near: null, at: { lat: 37.44, lon: -122.14 }, r: 100, sort: 'big', q: null });
 const qs = (u) => Object.fromEntries(new URL(u).searchParams);
 const hn = L.historyURLs({ at: { lat: 37.4419, lon: -122.143 }, r: 250, sort: 'big' });
 ok('near: a query, not a count', new URL(hn.list).pathname === '/fdsnws/event/1/query' && hn.list.startsWith(L.FDSN), hn.list);

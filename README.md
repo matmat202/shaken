@@ -13,6 +13,13 @@ When nothing is in range, it tells you how far away the nearest one was. The map
 (and out far enough to show that nearest one); **Show the whole world** zooms back out. The link keeps your
 choice, so `?near=Tokyo, Japan&p=month` opens on it.
 
+Tapping a magnitude badge **marks** that quake on the map, and the mark goes in the link
+too — `?q=us6000u4j2` — so you can send someone one quake rather than a view and hope they
+find it. **Copy link** in the marked bar hands over the whole address. The feed is a
+rolling window, so a link can outlive the quake it points at; when that happens the page
+says the marked quake is not in this view instead of quietly opening as if the link had
+only ever been about the map.
+
 A month is too short for most places: within 500 km, more than half the world's people get
 nothing M2.5+ in a typical month. **Since 1900** asks the USGS catalogue instead and lists
 the 200 biggest (or latest) quakes ever recorded inside the circle, with counts at M2.5, M5

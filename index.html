@@ -56,6 +56,7 @@ a{color:var(--accent)}
 #map .pin{fill:none;stroke:var(--here);stroke-width:2.5;vector-effect:non-scaling-stroke;pointer-events:none}
 #map .pinnote{display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:13px;margin:6px 4px 0}
 #map .pinnote .zoom{margin:0;flex:none}
+#map .pinnote .pinbtns{display:flex;gap:6px;flex:none}
 #map .pinnote span{min-width:0;overflow-wrap:anywhere}
 #map .here{fill:var(--here);stroke:var(--card);stroke-width:1.5;vector-effect:non-scaling-stroke}
 .legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--ink-2);margin:6px 4px 2px;align-items:center}
@@ -123,7 +124,7 @@ input,select,textarea{font-size:16px!important}
     <span><i style="background:var(--m0)"></i>2.5–3.9</span><span><i style="background:var(--m1)"></i>4s</span>
     <span><i style="background:var(--m2)"></i>5s</span><span><i style="background:var(--m3)"></i>6s</span><span><i style="background:var(--m4)"></i>7+</span>
   </div>
-  <div class="pinnote" id="pinNote" role="status" hidden><span id="pinText"></span><button type="button" class="zoom" id="pinClear">Clear</button></div>
+  <div class="pinnote" id="pinNote" role="status" hidden><span id="pinText"></span><span class="pinbtns"><button type="button" class="zoom" id="pinCopy">Copy link</button><button type="button" class="zoom" id="pinClear">Clear</button></span></div>
   <p class="hint" id="hint">Tap the map anywhere to see what shook near that spot.</p>
   <button type="button" class="zoom" id="zoom" hidden>Show the whole world</button>
 </div>

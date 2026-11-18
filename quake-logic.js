@@ -333,15 +333,25 @@ export const coarse = (at) => ({ lat: Math.round(at.lat * 10) / 10, lon: Math.ro
 // ---- URL state ------------------------------------------------------------------
 // ?p=month&near=Palo Alto, California, United States&r=250&sort=new  (p=ever: since 1900)
 // ?at=37.44,-122.14 for a point picked on the map or from the browser's location.
+// ?q=nc75455061 for the marked quake, so a link points at ONE quake, not just a view.
 // Unknown values fall back to the defaults rather than throw.
 
-export function encodeState({ period, near, at, r, sort }) {
+// A USGS event id is a network prefix plus a code. MEASURED 2026-11-17 over 2,460 real
+// ids -- the live 2.5_week feed (308), the frozen feed fixture (1,952) and 300 from the
+// 1900-1980 archive: the character set is exactly [0-9a-z_] and the longest is 28
+// ('official19060418131226300_12', the 1906 San Francisco quake). 40 characters and a
+// class that also allows capitals and '-' is headroom, not a guess. Anything else is
+// dropped rather than put in the address bar or matched against the feed.
+export const QID = /^[A-Za-z0-9_-]{1,40}$/;
+
+export function encodeState({ period, near, at, r, sort, q: pin }) {
   const q = new URLSearchParams();
   if (period && period !== DEFAULT_PERIOD) q.set('p', period);
   if (near) q.set('near', near);
   else if (at) q.set('at', `${at.lat.toFixed(2)},${at.lon.toFixed(2)}`);
   if ((near || at) && r && r !== DEFAULT_KM) q.set('r', String(r));
   if (sort && sort !== 'big') q.set('sort', sort);
+  if (pin && QID.test(pin)) q.set('q', pin);
   const s = q.toString();
   return s ? `?${s}` : '';
 }
@@ -358,7 +368,8 @@ export function decodeState(search) {
   }
   const r = RADII.includes(+q.get('r')) ? +q.get('r') : DEFAULT_KM;
   const sort = SORTS.includes(q.get('sort')) ? q.get('sort') : 'big';
-  return { period, near, at, r, sort };
+  const pin = QID.test(q.get('q') || '') ? q.get('q') : null;
+  return { period, near, at, r, sort, q: pin };
 }
 
 // ---- aftershock forecast: USGS's 'oaf' product -------------------------------------------

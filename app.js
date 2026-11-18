@@ -21,6 +21,11 @@ const state = { period: 'week', near: null, at: null, r: DEFAULT_KM, sort: 'big'
 let worldView = false;
 // The quake a row's badge asked to see on the map (its id), or null. Dropped once it leaves the list.
 let pin = null;
+// A ?q= link can outlive the quake it marks: the feed is a rolling window, so one
+// shared from the month view is gone thirty days later. pinGone says so once,
+// instead of opening a page that quietly ignores half the link.
+let pinGone = false;
+let copyTimer = null;
 let FEEDDOC = null, ALL = [], WORLD = null, PLACES = null, placesP = null;
 // Since 1900 is asked of the catalogue per place, radius and sort: {key, status, events, counts}.
 let HIST = { key: null, status: 'idle', events: [], counts: [] };
@@ -44,7 +49,7 @@ function sync() {
   // The browser's own position never goes into the address bar, which is what gets shared:
   // the nearest town does, or the point to 0.1°.
   if (at && at.mine) { near = at.town; at = at.town ? null : coarse(at); }
-  history.replaceState(null, '', location.pathname + encodeState({ ...state, near, at }));
+  history.replaceState(null, '', location.pathname + encodeState({ ...state, near, at, q: pin }));
 }
 
 // ---- map --------------------------------------------------------------------------
@@ -65,7 +70,11 @@ function drawMap() {
   if (WORLD) el('path', { class: 'land', d: WORLD.land }, svg);
   const g = el('g', { id: 'qs' }, svg);
   const pinned = pin && list.find((e) => e.id === pin);
-  if (pin && !pinned) pin = null;
+  // Only settle the mark against a list that has ARRIVED. Before the feed answers ALL is
+  // empty, and 'ever' redraws once with an empty HIST while the catalogue is still being
+  // asked -- dropping the mark there would lose every ?p=ever&q= link on the first paint.
+  const settled = ever() ? HIST.status === 'ok' : !!FEEDDOC;
+  if (pin && !pinned && settled) { pinGone = true; pin = null; }
   for (const e of list.slice().sort((a, b) => (a === pinned) - (b === pinned) || a.mag - b.mag)) {
     const c = el('circle', { class: `q b${band(e.mag)}${inside && !inside.has(e.id) ? ' out' : ''}`,
       cx: e.lon.toFixed(2), cy: (-e.lat).toFixed(2), r: (dotR(e.mag) * k).toFixed(3), 'data-id': e.id }, g);
@@ -86,8 +95,10 @@ function drawMap() {
   const pm = pinned && pinAt(pinned, V, dotR(pinned.mag) * k);
   // Copies a world away too: a quake at the map's edge (Fiji, Tonga) rings on both sides.
   if (pm) for (const dx of [0, -360, 360]) el('circle', { class: 'pin', cx: (pm.cx + dx).toFixed(2), cy: pm.cy.toFixed(2), r: pm.r.toFixed(3), ...(dx ? {} : { 'data-id': pinned.id }) }, svg);
-  $('pinNote').hidden = !pinned;
+  $('pinNote').hidden = !pinned && !pinGone;
+  $('pinCopy').hidden = !pinned; // nothing to share when the mark could not be found
   if (pinned) $('pinText').textContent = `Marked: M${fmtMag(pinned.mag)} · ${pinned.place}`;
+  else if (pinGone) $('pinText').textContent = 'The quake this link marked is not in this view — it may be older than the period, or outside it.';
   for (const b of document.querySelectorAll('#list button.mag')) b.setAttribute('aria-pressed', String(b.dataset.id === pin));
   $('zoom').hidden = !at;
   $('zoom').textContent = worldView ? 'Zoom to the circle' : 'Show the whole world';
@@ -197,7 +208,10 @@ function row(e) {
 
 function showOnMap(id) {
   pin = pin === id ? null : id;
+  pinGone = false;
   drawMap();
+  sync(); // the address bar is what gets shared, so the mark goes in it
+
   if (pin) $('map').scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
 }
 
@@ -398,7 +412,18 @@ function wire() {
     if (p && (PERIODS[p] || p === HISTORY) && p !== state.period) { state.period = p; state.shown = PAGE; drawAll(); }
   });
   $('zoom').addEventListener('click', () => { worldView = !worldView; drawMap(); });
-  $('pinClear').addEventListener('click', () => { pin = null; drawMap(); });
+  $('pinClear').addEventListener('click', () => { pin = null; pinGone = false; drawMap(); sync(); });
+  // The mark is in the address bar, which on a phone is the one thing that is awkward to
+  // reach. The button hands over the whole link, and says so for two seconds; if the
+  // clipboard is refused (no permission, or an insecure origin) it says that instead of
+  // pretending it worked.
+  $('pinCopy').addEventListener('click', async () => {
+    const b = $('pinCopy');
+    try { await navigator.clipboard.writeText(location.href); b.textContent = 'Link copied'; }
+    catch { b.textContent = 'Press and hold the address bar'; }
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => { b.textContent = 'Copy link'; }, 2500);
+  });
   $('more').addEventListener('click', () => { state.shown += PAGE * 4; drawList(); });
 }
 
@@ -444,6 +469,7 @@ async function tick() {
 async function main() {
   const want = decodeState(location.search);
   Object.assign(state, { period: want.period, r: want.r, sort: want.sort });
+  pin = want.q; // resolved against the feed by the first drawMap, which also reports it gone
   if (want.at) state.at = { ...want.at, label: latLonLabel(want.at.lat, want.at.lon) };
   wire();
   const worldP = fetch('data/world.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);
