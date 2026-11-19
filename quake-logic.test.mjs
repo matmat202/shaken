@@ -377,5 +377,114 @@ eq('dots at world scale, crowded or not', L.dotScale([-180, -85, 360, 160], Arra
   near('pin: zoomed, the ring shrinks with the view', L.pinAt(fiji, east).r, 40 / 36, 1e-9);
   near('pin: never smaller than its dot', L.pinAt(fiji, east, 2).r, 3.2, 1e-9); }
 
+// --- the ring, the viewBox, the pin's edges, the refresh clock, the nearest town --------
+// Added 2026-11-19. mutwatch had 25 survivors here, 18 of them inside functions its
+// equivalence sweep never reaches: DOT_COVER, MIN_VIEW_W, NEAR_TOWN_KM, PIN_SHARE,
+// REFRESH_MS, coarse, dotScale, mapView, nearestPlace, pinAt, refreshDue, ringPoints.
+// Each case below names the mutation it kills.
+{
+  // kills L171 `steps = 96` -> `97`, L175 `i <= steps` -> `<`, and L175 `i = 0` -> `1`:
+  // the ring is closed, so it has steps + 1 points and the last repeats the first.
+  eq('ringPoints draws 96 steps by default, closed', L.ringPoints(0, 0, 100).length, 97);
+  eq('ringPoints honours an explicit step count, closed', L.ringPoints(0, 0, 100, 4).length, 5);
+  const r1 = L.ringPoints(0, 0, 111.19492664455873, 4);
+  // kills L177 `sin(p1) * cos(d) + cos(p1) * ...` -> `-`: at the equator that flips the
+  // sign of every latitude, so bearing 0 would point south instead of north.
+  near('ringPoints starts due NORTH of the point (y is -lat)', r1[0][1], -1, 1e-5);
+  near('ringPoints quarter-turn is due east, on the equator', r1[1][0], 1, 1e-5);
+  near('ringPoints closes exactly where it opened', r1[4][1], r1[0][1], 1e-9);
+  // kills L180 `x += 360` -> `361`: round a pole the bearing sweeps the whole meridian
+  // range, and the unwrap must put it back on exactly [-180, 180], not [-180, 181].
+  {
+    const xs = L.ringPoints(89, 0, 500, 48).map((p) => p[0]);
+    near('ringPoints round a pole unwraps onto exactly +/-180', Math.max(...xs), 180, 1e-6);
+    near('ringPoints round a pole starts at exactly -180', Math.min(...xs), -180, 1e-6);
+  }
+
+  // kills L206 `WORLD_VIEW[1] + WORLD_VIEW[3] - h` -> `+ h` AND its `WORLD_VIEW[1]` ->
+  // `[2]`: far south the lower clamp binds, so the box must sit flush against the bottom
+  // of the world (top + h === -85 + 160) and no lower.
+  {
+    const v = L.mapView({ lat: -70, lon: 0 }, 1000);
+    near('mapView clamps a far-south box flush to the bottom of the world', v[1] + v[3], 75, 1e-9);
+    ok('mapView does not fall back to the world for a 1000 km circle', v[2] < 360, JSON.stringify(v));
+    const n = L.mapView({ lat: 70, lon: 0 }, 1000);
+    near('mapView clamps a far-north box flush to the top of the world', n[1], -85, 1e-9);
+    const m = L.mapView({ lat: 0, lon: 0 }, 1000);
+    near('mapView centres a mid-latitude box on the circle', m[1] + m[3] / 2, 0, 1e-9);
+  }
+  // kills L203 `w >= WORLD_VIEW[2]` -> `WORLD_VIEW[3]`: 263 degrees wide is wider than the
+  // world is TALL but still narrower than the world, so it must not fall back to the world.
+  {
+    const v = L.mapView({ lat: 0, lon: 0 }, 5000);
+    ok('mapView keeps a box wider than the world is tall', v[2] > 160 && v[2] < 360, JSON.stringify(v));
+    eq('mapView falls back to the world once the circle is wider than it', L.mapView({ lat: 0, lon: 0 }, 9000), L.WORLD_VIEW);
+    eq('mapView with no point is the world', L.mapView(null, 100), L.WORLD_VIEW);
+  }
+
+  // kills all four of pinAt's edge comparisons: a quake exactly ON an edge of the viewBox
+  // is INSIDE it. L229 `y < y0` -> `<=`, `y > y0 + h` -> `>=`, L230 `v >= x0` -> `>`,
+  // `v <= x0 + w` -> `<`.
+  {
+    const view = [-10, -10, 20, 20];
+    ok('pinAt keeps a quake on the top edge', L.pinAt({ lat: 10, lon: 0 }, view) !== null);
+    ok('pinAt keeps a quake on the bottom edge', L.pinAt({ lat: -10, lon: 0 }, view) !== null);
+    ok('pinAt keeps a quake on the left edge', L.pinAt({ lat: 0, lon: -10 }, view) !== null);
+    ok('pinAt keeps a quake on the right edge', L.pinAt({ lat: 0, lon: 10 }, view) !== null);
+    eq('pinAt drops a quake just above the box', L.pinAt({ lat: 10.001, lon: 0 }, view), null);
+    eq('pinAt drops a quake just below the box', L.pinAt({ lat: -10.001, lon: 0 }, view), null);
+    eq('pinAt drops a quake outside it in longitude', L.pinAt({ lat: 0, lon: 170 }, view), null);
+    eq('pinAt finds a quake one world to the east', (L.pinAt({ lat: 0, lon: 355 }, view) || {}).cx, -5);
+  }
+
+  // kills L246 `now < fetchedAt` -> `<=`: the same instant is not a clock going backwards
+  eq('refreshDue is false at the very instant of the fetch', L.refreshDue(1000, 1000, false), false);
+  eq('refreshDue is true once REFRESH_MS has passed', L.refreshDue(1000, 1000 + L.REFRESH_MS, false), true);
+  eq('refreshDue is false one tick before', L.refreshDue(1000, 1000 + L.REFRESH_MS - 1, false), false);
+  eq('refreshDue is true when the clock went backwards', L.refreshDue(1000, 999, false), true);
+  eq('refreshDue never fires for a hidden tab', L.refreshDue(null, 1e12, true), false);
+  eq('refreshDue fires when nothing was ever fetched', L.refreshDue(null, 0, false), true);
+
+  // [NAME, A1, CC, LAT, LON, POP]
+  const pp = (name, lat, lon) => [name, 'A1', 'CC', lat, lon, 20000];
+  // kills L325 `NEAR_TOWN_KM = 50` -> `51`: 0.4542 degrees of latitude is 50.505 km, which
+  // is outside the radius, so the link must fall back to the rounded point.
+  eq('nearestPlace refuses a town 50.5 km away', L.nearestPlace([pp('Far', 0.4542, 0)], 0, 0), null);
+  eq('nearestPlace takes a town 48.9 km away', (L.nearestPlace([pp('Near', 0.44, 0)], 0, 0) || {}).place[0], 'Near');
+  // kills L328 `if (d < bd)` -> `<=`: two towns at the same point tie, and the FIRST listed
+  // must win; `<=` silently hands every tie to the last one.
+  eq('nearestPlace keeps the first of two towns at the same point',
+     L.nearestPlace([pp('Alpha', 0.1, 0), pp('Beta', 0.1, 0)], 0, 0).place[0], 'Alpha');
+  eq('nearestPlace keeps the first whichever order they are listed in',
+     L.nearestPlace([pp('Beta', 0.1, 0), pp('Alpha', 0.1, 0)], 0, 0).place[0], 'Beta');
+  eq('nearestPlace of nowhere is nothing', L.nearestPlace([], 0, 0), null);
+
+  // The ring's unwrap fires round the SOUTH pole but not the north, where atan2 happens to
+  // come out monotone already and the `while` is dead code. A north-pole ring therefore
+  // cannot test it -- this was measured, not assumed.
+  // kills L180 `x += 360` -> `361`
+  {
+    const sx = L.ringPoints(-89, 0, 500, 48).map((p) => p[0]);
+    near('ringPoints round the south pole unwraps by exactly 360', Math.max(...sx), 360, 1e-6);
+    near('ringPoints round the south pole starts at 0', Math.min(...sx), 0, 1e-6);
+  }
+
+  // mapView's `also` (the nearest quake, when none is inside the circle) is pulled to
+  // whichever copy of the world is nearest the circle. Both `while` loops below were
+  // entirely untested, which is why all six of their mutants survived.
+  {
+    const mv = (atlon, alsolon) => L.mapView({ lat: 0, lon: atlon }, 100, { lat: 0, lon: alsolon });
+    // kills L197 `at.lon - x > 180` -> `>= 180`, `-> 181`, and `x += 360` -> `361`
+    near('mapView pulls a westward also across the antimeridian', mv(170, -170)[2], 27.1691, 1e-3);
+    near('mapView leaves an also exactly 180 west where it is', mv(0, -180)[0], -207.1349, 1e-3);
+    near('mapView pulls an also 180.5 west round the back', mv(0, -180.5)[0], -27.9592, 1e-3);
+    // kills L196 `x - at.lon > 180` -> `>= 180`, `-> 181`, and `x -= 360` -> `361`
+    near('mapView pulls an eastward also across the antimeridian', mv(-170, 170)[0], -193.1349, 1e-3);
+    near('mapView leaves an also exactly 180 east where it is', mv(0, 180)[0], -28.0342, 1e-3);
+    near('mapView pulls an also 180.5 east round the back', mv(0, 180.5)[0], -206.5599, 1e-3);
+    ok('mapView with a nearby also stays a narrow box, not the world', mv(170, -170)[2] < 40, JSON.stringify(mv(170, -170)));
+  }
+}
+
 console.log(`${fail ? 'FAILED' : 'ok'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
