@@ -212,6 +212,17 @@ const Q = (id, mag, time, extra = {}) => ({ id, mag, time, lat: 0, lon: 0, tsuna
 eq('summary: biggest, then latest, over three', [L.summary([Q('a', 5, 1), Q('b', 6, 2), Q('c', 4, 3)]).max.id, L.summary([Q('a', 6, 5), Q('b', 6, 5), Q('c', 6, 4)]).max.id], ['b', 'a']);
 eq('feed order: newest, then biggest among equal times', L.parseFeed({ features: [5, 7, 6].map((m, k) => ({ id: `q${k}`, properties: { type: 'earthquake', mag: m, time: 100 }, geometry: { coordinates: [0, 0, 1] } })) }).events.map((e) => e.mag), [7, 6, 5]);
 eq('sort new: newest, then biggest among equal times', L.sortEvents([Q('a', 5, 100), Q('b', 7, 100), Q('c', 6, 200)], 'new').map((e) => e.id), ['c', 'b', 'a']);
+// Closest first: four, misordered, with a tie on distance (bigger wins) and a tie on distance and size (later wins).
+eq('sort near: closest, then biggest, then latest', L.sortEvents([Q('a', 4, 1, { d: 300 }), Q('b', 5, 1, { d: 20 }), Q('c', 6, 1, { d: 20 }), Q('d', 6, 9, { d: 20 }), Q('e', 7, 1, { d: 150.5 })], 'near').map((e) => e.id), ['d', 'c', 'b', 'e', 'a']);
+eq('sort near without distances (the world list) is biggest first', L.sortEvents([Q('a', 5, 1), Q('b', 7, 1), Q('c', 6, 1)], 'near').map((e) => e.id), ['b', 'c', 'a']);
+{
+  const pa = { lat: 37.44, lon: -122.14 }, w = L.sortEvents(L.nearEvents(real.events, pa, 500), 'near');
+  ok('sort near on the real feed: distances never go down', w.length > 2 && w.every((e, k) => !k || w[k - 1].d <= e.d), w.length);
+  eq('sort near on the real feed: first is the nearest of all', w[0].id, L.nearest(real.events, pa).id);
+}
+eq('closest first rides in the URL with a place', L.decodeState(L.encodeState({ period: 'week', near: 'Lagos, Lagos, Nigeria', r: 500, sort: 'near' })).sort, 'near');
+eq('closest first without a place stays out of the URL', L.encodeState({ period: 'week', r: 500, sort: 'near' }), '');
+eq('closest first by point', L.encodeState({ period: 'week', at: { lat: 1, lon: 2 }, r: 500, sort: 'near' }), '?at=1.00%2C2.00&sort=near');
 const feature = (props, coords) => ({ id: 'x', properties: { type: 'earthquake', mag: 5, time: 1, ...props }, geometry: { coordinates: coords } });
 eq('parseFeed drops a quake missing any one of lat, lon or time', [[{}, [NaN, 1, 1]], [{}, [1, NaN, 1]], [{ time: NaN }, [1, 1, 1]]].map(([p, c]) => L.parseFeed({ features: [feature(p, c)] }).events.length), [0, 0, 0]);
 eq('parseFeed keeps the alert and defaults a missing url to ""', (({ url, alert }) => [url, alert])(L.parseFeed({ features: [feature({ alert: 'green' }, [1, 1, 1])] }).events[0]), ['', 'green']);

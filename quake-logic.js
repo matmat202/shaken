@@ -10,7 +10,9 @@ export const PERIODS = { day: 1, week: 7, month: 30 };
 export const DEFAULT_PERIOD = 'week';
 export const RADII = [100, 250, 500, 1000, 2500];
 export const DEFAULT_KM = 500;
-export const SORTS = ['big', 'new'];
+// 'near' (closest first) only means something with a place; without one it reads as 'big'.
+export const SORTS = ['big', 'new', 'near'];
+export const SORT_WORD = { big: 'Biggest', new: 'Latest', near: 'Closest' };
 const DAY = 86400e3;
 
 // ---- since 1900 ------------------------------------------------------------------------
@@ -78,10 +80,13 @@ export function km(lat1, lon1, lat2, lon2) {
   return 2 * 6371.0088 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-// Biggest first; among equals, the most recent.
+// Biggest first; among equals, the most recent. 'near' orders by the distance `d` that
+// nearEvents adds -- closest, then biggest, then latest. A list with no distances (the world
+// view) comes out biggest first: undefined - undefined is NaN, and NaN || x is x.
 export function sortEvents(list, sort) {
   const out = list.slice();
-  if (sort === 'new') out.sort((a, b) => b.time - a.time || b.mag - a.mag);
+  if (sort === 'near') out.sort((a, b) => a.d - b.d || b.mag - a.mag || b.time - a.time);
+  else if (sort === 'new') out.sort((a, b) => b.time - a.time || b.mag - a.mag);
   else out.sort((a, b) => b.mag - a.mag || b.time - a.time);
   return out;
 }
@@ -350,7 +355,7 @@ export function encodeState({ period, near, at, r, sort, q: pin }) {
   if (near) q.set('near', near);
   else if (at) q.set('at', `${at.lat.toFixed(2)},${at.lon.toFixed(2)}`);
   if ((near || at) && r && r !== DEFAULT_KM) q.set('r', String(r));
-  if (sort && sort !== 'big') q.set('sort', sort);
+  if (sort && sort !== 'big' && (sort !== 'near' || near || at)) q.set('sort', sort);
   if (pin && QID.test(pin)) q.set('q', pin);
   const s = q.toString();
   return s ? `?${s}` : '';

@@ -4,7 +4,7 @@ import {
   band, dotR, fmtMag, ago, kmLabel, latLonLabel, matchPlaces, placeLabel, placeByLabel, P,
   encodeState, decodeState, HISTORY, HIST_LIMIT, HIST_MAGS, historyURLs, feltHere, FELT_WORDS,
   DETAIL, forecastURL, aftershockOutlook, pct, ringPoints, mapView, dotScale, WORLD_VIEW,
-  nearestPlace, coarse, refreshDue, pinAt,
+  nearestPlace, coarse, refreshDue, pinAt, SORT_WORD,
 } from './quake-logic.js';
 
 const FEED = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_month.geojson';
@@ -42,6 +42,8 @@ const ever = () => state.period === HISTORY;
 const events = () => (ever() ? HIST.events : inPeriod(ALL, now(), state.period));
 // The point the list is about, or null for the whole world.
 const here = () => state.at;
+// Closest first needs a place; without one the list is biggest first and the menu says so.
+const sortBy = () => (state.sort === 'near' && !here() ? 'big' : state.sort);
 const hereLabel = () => state.near || (state.at && state.at.label) || '';
 
 function sync() {
@@ -265,9 +267,10 @@ function drawList() {
     note.textContent = HIST.status === 'error' ? 'The USGS catalogue did not answer. Try again in a minute.' : 'Asking the USGS catalogue for every quake since 1900…';
     $('listTitle').textContent = at ? `Biggest within ${fmt(state.r)} km of ${hereLabel()} since 1900` : 'Biggest in the world since 1900';
   } else if (ever()) {
-    rows = sortEvents(at ? nearEvents(list, at, state.r + 1) : list, state.sort);
-    const what = `${state.sort === 'new' ? 'Latest' : 'Biggest'} ${fmt(Math.min(rows.length, HIST_LIMIT))}`;
-    $('listTitle').textContent = at ? `${what} within ${fmt(state.r)} km of ${hereLabel()} since 1900` : `${what} in the world since 1900`;
+    rows = sortEvents(at ? nearEvents(list, at, state.r + 1) : list, sortBy());
+    // The catalogue cannot order by distance: closest first is the biggest 200, re-ordered.
+    const what = `${sortBy() === 'new' ? 'Latest' : 'Biggest'} ${fmt(Math.min(rows.length, HIST_LIMIT))}`;
+    $('listTitle').textContent = at ? `${what} within ${fmt(state.r)} km of ${hereLabel()} since 1900${sortBy() === 'near' ? ', closest first' : ''}` : `${what} in the world since 1900`;
     if (!rows.length) {
       note.hidden = false;
       note.textContent = `Nothing of magnitude 2.5 or more within ${fmt(state.r)} km in the USGS catalogue since 1900. Try a wider circle.`;
@@ -276,8 +279,8 @@ function drawList() {
       note.textContent = `The ${state.sort === 'new' ? 'latest' : 'biggest'} ${fmt(HIST_LIMIT)} of ${HIST.counts[0] != null ? fmt(HIST.counts[0]) : 'all'} in the catalogue. Older and smaller quakes are under-recorded, more so outside the US.`;
     }
   } else if (at) {
-    rows = sortEvents(nearEvents(list, at, state.r), state.sort);
-    $('listTitle').textContent = `${state.sort === 'new' ? 'Latest' : 'Biggest'} within ${fmt(state.r)} km of ${hereLabel()}`;
+    rows = sortEvents(nearEvents(list, at, state.r), sortBy());
+    $('listTitle').textContent = `${SORT_WORD[sortBy()]} within ${fmt(state.r)} km of ${hereLabel()}`;
     if (!rows.length) {
       const n = nearest(list, at);
       note.hidden = false;
@@ -286,13 +289,14 @@ function drawList() {
       if (n) rows = [n];
     }
   } else {
-    rows = sortEvents(list, state.sort);
-    $('listTitle').textContent = `${state.sort === 'new' ? 'Latest' : 'Biggest'} in the world ${WORDS[state.period]}`;
+    rows = sortEvents(list, sortBy());
+    $('listTitle').textContent = `${SORT_WORD[sortBy()]} in the world ${WORDS[state.period]}`;
   }
   ol.replaceChildren(...rows.slice(0, state.shown).map(row));
   $('more').hidden = rows.length <= state.shown;
   $('more').textContent = `Show more (${fmt(rows.length - state.shown)} left)`;
-  $('sort').value = state.sort;
+  $('sortNear').disabled = !at;
+  $('sort').value = sortBy();
   $('km').value = String(state.r);
 }
 
