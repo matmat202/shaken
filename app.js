@@ -1,7 +1,7 @@
 // Shaken: the page. Logic lives in quake-logic.js; this file only reads and draws.
 import {
   PERIODS, RADII, DEFAULT_KM, parseFeed, inPeriod, sortEvents, nearEvents, nearest, summary,
-  band, dotR, fmtMag, ago, kmLabel, latLonLabel, matchPlaces, placeLabel, placeByLabel, P,
+  band, dotR, fmtMag, ago, whenLabel, kmLabel, latLonLabel, matchPlaces, placeLabel, placeByLabel, P,
   encodeState, decodeState, HISTORY, HIST_LIMIT, HIST_MAGS, historyURLs, feltHere, FELT_WORDS,
   DETAIL, forecastURL, aftershockOutlook, pct, ringPoints, mapView, dotScale, WORLD_VIEW,
   nearestPlace, coarse, refreshDue, pinAt, SORT_WORD,
@@ -169,7 +169,6 @@ function loadHistory() {
   }).catch(() => {}));
 }
 
-const whenFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const dateFmt = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const OLD = 300 * 86400e3;
 
@@ -188,7 +187,7 @@ function row(e) {
   // levels that predict damage or deaths are worth a tag.
   if (DAMAGE[e.alert]) { const g = document.createElement('span'); g.className = `tag ${e.alert}`; g.textContent = DAMAGE[e.alert]; t.append(g); }
   const meta = document.createElement('div'); meta.className = 'm';
-  const bits = [ago(e.time, Date.now()), (Date.now() - e.time > OLD ? dateFmt : whenFmt).format(new Date(e.time))];
+  const bits = [ago(e.time, Date.now()), Date.now() - e.time > OLD ? dateFmt.format(new Date(e.time)) : whenLabel(e.time)];
   if (e.depth != null) bits.push(`${Math.round(e.depth)} km deep`);
   if (e.felt) bits.push(`${fmt(e.felt)} felt report${e.felt === 1 ? '' : 's'}`);
   meta.textContent = bits.join(' · ');

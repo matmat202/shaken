@@ -266,6 +266,17 @@ export function ago(t, now) {
   return `${y.toLocaleString('en-US')} years ago`;
 }
 
+// A row's clock time names its zone. It is the reader's own clock, which for a quake near a
+// town on the other side of the world is not the clock there, and without the zone
+// "Sat, Nov 21, 01:42 AM" read as either. `tz` and `locale` exist for the tests; the page
+// passes neither and gets the browser's.
+const WHEN = new Map();
+export function whenLabel(t, tz, locale) {
+  const k = `${tz}|${locale}`;
+  if (!WHEN.has(k)) WHEN.set(k, new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZoneName: 'short', timeZone: tz }));
+  return WHEN.get(k).format(new Date(t));
+}
+
 export function kmLabel(d) {
   return d < 10 ? `${d.toFixed(1)} km` : `${Math.round(d).toLocaleString('en-US')} km`;
 }

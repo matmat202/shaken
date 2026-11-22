@@ -223,6 +223,17 @@ if (fdsnFix) {
   ok('catalogue fixture: biggest near Palo Alto since 1900 is the 1906 M7.9', big.mag === 7.9 && new Date(big.time).getUTCFullYear() === 1906, JSON.stringify(big));
 } else ok('test/hist-fixture.json exists', false);
 
+// --- a row's clock names its zone ----------------------------------------------------------
+// The reader's clock, said so: a Tokyo quake read from California is a California time.
+{
+  const t = Date.UTC(2026, 10, 21, 9, 42), summer = Date.UTC(2026, 6, 4, 19, 5);
+  eq('row time in Los Angeles says PST', L.whenLabel(t, 'America/Los_Angeles', 'en-US'), 'Sat, Nov 21, 01:42 AM PST');
+  eq('row time in Tokyo is Tokyo\'s clock, zone named', L.whenLabel(t, 'Asia/Tokyo', 'en-US'), 'Sat, Nov 21, 06:42 PM GMT+9');
+  eq('row time in July says PDT', L.whenLabel(summer, 'America/Los_Angeles', 'en-US'), 'Sat, Jul 4, 12:05 PM PDT');
+  eq('a second locale in the same zone is not served the first one\'s format', L.whenLabel(t, 'America/Los_Angeles', 'en-GB'), 'Sat 21 Nov, 01:42 GMT-8');
+  eq('back in the first zone after another', L.whenLabel(t, 'UTC', 'en-US'), 'Sat, Nov 21, 09:42 AM UTC');
+}
+
 // --- exact edges ---------------------------------------------------------------------------
 const Q = (id, mag, time, extra = {}) => ({ id, mag, time, lat: 0, lon: 0, tsunami: false, ...extra });
 // Three, in the wrong order: a smaller later quake must not take "biggest", nor an equal one at the same time.
