@@ -276,7 +276,7 @@ export function latLonLabel(lat, lon) {
 
 // ---- places: [name, admin1, country, lat, lon, pop], most populous first ----------
 
-export const P = { NAME: 0, A1: 1, CC: 2, LAT: 3, LON: 4, POP: 5 };
+export const P = { NAME: 0, A1: 1, CC: 2, LAT: 3, LON: 4, POP: 5, NEAR: 6 };
 
 // Letters NFD does not take apart: "tromso" has to find the slashed o of Tromso, "lodz" the barred l of Lodz.
 const LETTERS = { '\u00f8': 'o', '\u00e6': 'ae', '\u0153': 'oe', '\u00df': 'ss', '\u0142': 'l', '\u0111': 'd', '\u00f0': 'd', '\u00fe': 'th', '\u0131': 'i', '\u0127': 'h' };
@@ -294,8 +294,12 @@ export function fold(s) {
   return v;
 }
 
+// Two towns can carry one name in one region (two Hayes in England). build.py gives the
+// smaller of a colliding pair a NEAR field -- a bigger neighbour's name -- so each town is
+// its own line and its own ?at= link. The biggest namesake keeps the bare label, so links
+// made before this still open the town they opened then.
 export function placeLabel(p) {
-  const parts = [p[P.NAME]];
+  const parts = [p[P.NEAR] ? `${p[P.NAME]} (near ${p[P.NEAR]})` : p[P.NAME]];
   if (p[P.A1] && p[P.A1] !== p[P.NAME]) parts.push(p[P.A1]);
   parts.push(p[P.CC]);
   return parts.join(', ');

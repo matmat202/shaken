@@ -176,6 +176,23 @@ if (existsSync(placesFile)) {
   const pa = L.placeByLabel(P, 'Palo Alto, California, United States');
   eq('shipped: P names the columns', [pa[L.P.NAME], pa[L.P.A1], pa[L.P.CC], pa[L.P.LAT], pa[L.P.LON], pa[L.P.POP]], ['Palo Alto', 'California', 'United States', 37.44, -122.14, 66853]);
   eq('shipped: "victoria" is eight Victorias (nine have the whole name, so no prefix gets in)', L.matchPlaces(P, 'victoria').map((p) => p[0]), Array(8).fill('Victoria'));
+  // Two towns, one label (two Hayes in England): placeByLabel folds and takes the first
+  // match, so without a hint the second can be seen in the list but never picked or shared.
+  const labels = P.map((p) => L.fold(L.placeLabel(p)));
+  const dup = labels.filter((l, i) => labels.indexOf(l) !== i);
+  eq('shipped: no two towns share a label', [dup.length, dup.slice(0, 3)], [0, []]);
+  const hayes = L.matchPlaces(P, 'hayes, england').map(L.placeLabel).filter((l) => l.startsWith('Hayes'));
+  eq('shipped: both Hayes listed, the smaller with its neighbour', hayes,
+    ['Hayes, England, United Kingdom', 'Hayes (near Beckenham), England, United Kingdom']);
+  const small = P.find((p) => p[L.P.NAME] === 'Hayes' && p[L.P.NEAR]);
+  eq('shipped: the hinted label opens that town, not its namesake',
+    L.placeByLabel(P, 'Hayes (near Beckenham), England, United Kingdom'), small);
+  eq('shipped: the bare label still opens the bigger one, as old ?at= links did',
+    L.placeByLabel(P, 'Hayes, England, United Kingdom')[L.P.POP], 93928);
+  ok('shipped: enough towns are hinted for the checks above to mean something',
+    P.filter((p) => p[L.P.NEAR]).length >= 50, P.filter((p) => p[L.P.NEAR]).length);
+  ok('shipped: a hint is a real town of the same country',
+    P.every((p) => !p[L.P.NEAR] || P.some((o) => o[L.P.NAME] === p[L.P.NEAR] && o[L.P.CC] === p[L.P.CC])), true);
 } else ok('shipped: data/places.json exists (run build.py)', false);
 
 // --- since 1900 -------------------------------------------------------------------------
