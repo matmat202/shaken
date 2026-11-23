@@ -285,9 +285,40 @@ export function latLonLabel(lat, lon) {
   return `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? 'E' : 'W'}`;
 }
 
-// ---- places: [name, admin1, country, lat, lon, pop], most populous first ----------
+// The clock at the quake. A row's time is the reader's (whenLabel); read from California, a
+// Tokyo quake's "Sat, 01:42 AM PST" says nothing about whether it struck at night there.
+// The zone is the nearest town of 15,000+ within ZONE_KM; beyond that (a mid-ocean ridge)
+// there is no "there" to name and the answer is null. The latitude test skips the haversine
+// for nearly every town, so a list's worth of rows costs a few ms.
+export const ZONE_KM = 300;
+export function zoneAt(places, zones, lat, lon, maxKm = ZONE_KM) {
+  let best = null, bd = maxKm;
+  for (const p of places) {
+    if (Math.abs(p[P.LAT] - lat) * 111.2 > bd) continue;
+    const d = km(lat, lon, p[P.LAT], p[P.LON]);
+    if (d <= bd) { bd = d; best = p; }
+  }
+  return best ? zones[best[P.TZ]] : null;
+}
 
-export const P = { NAME: 0, A1: 1, CC: 2, LAT: 3, LON: 4, POP: 5, NEAR: 6 };
+// "Sun 06:42 AM there", or null when the clock there reads what the reader's does -- then the
+// row's own time already says it, and repeating it is noise. `readerTz` exists for the tests.
+const THERE = new Map();
+function thereFmt(tz, locale) {
+  const k = `${tz}|${locale}`;
+  if (!THERE.has(k)) THERE.set(k, new Intl.DateTimeFormat(locale, { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: tz }));
+  return THERE.get(k);
+}
+export function thereLabel(t, tz, readerTz, locale) {
+  if (!tz) return null;
+  const there = thereFmt(tz, locale).format(new Date(t));
+  return there === thereFmt(readerTz, locale).format(new Date(t)) ? null : `${there} there`;
+}
+
+// ---- places: [name, admin1, country, lat, lon, pop, tz, near?], most populous first ----
+
+// TZ indexes the places file's `zones`; NEAR is optional, so it stays last.
+export const P = { NAME: 0, A1: 1, CC: 2, LAT: 3, LON: 4, POP: 5, TZ: 6, NEAR: 7 };
 
 // Letters NFD does not take apart: "tromso" has to find the slashed o of Tromso, "lodz" the barred l of Lodz.
 const LETTERS = { '\u00f8': 'o', '\u00e6': 'ae', '\u0153': 'oe', '\u00df': 'ss', '\u0142': 'l', '\u0111': 'd', '\u00f0': 'd', '\u00fe': 'th', '\u0131': 'i', '\u0127': 'h' };

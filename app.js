@@ -4,7 +4,7 @@ import {
   band, dotR, fmtMag, ago, whenLabel, kmLabel, latLonLabel, matchPlaces, placeLabel, placeByLabel, P,
   encodeState, decodeState, HISTORY, HIST_LIMIT, HIST_MAGS, historyURLs, feltHere, FELT_WORDS,
   DETAIL, forecastURL, aftershockOutlook, pct, ringPoints, mapView, dotScale, WORLD_VIEW,
-  nearestPlace, coarse, refreshDue, pinAt, SORT_WORD,
+  nearestPlace, coarse, refreshDue, pinAt, SORT_WORD, zoneAt, thereLabel,
 } from './quake-logic.js';
 
 const FEED = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_month.geojson';
@@ -26,7 +26,7 @@ let pin = null;
 // instead of opening a page that quietly ignores half the link.
 let pinGone = false;
 let copyTimer = null;
-let FEEDDOC = null, ALL = [], WORLD = null, PLACES = null, placesP = null;
+let FEEDDOC = null, ALL = [], WORLD = null, PLACES = null, ZONES = null, placesP = null;
 // Since 1900 is asked of the catalogue per place, radius and sort: {key, status, events, counts}.
 let HIST = { key: null, status: 'idle', events: [], counts: [] };
 
@@ -172,6 +172,7 @@ function loadHistory() {
 const dateFmt = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const OLD = 300 * 86400e3;
 
+const READER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone, TZ_AT = new Map();
 function row(e) {
   const li = document.createElement('li');
   // The badge marks this quake's dot on the map and brings the map into view: on a phone
@@ -188,6 +189,12 @@ function row(e) {
   if (DAMAGE[e.alert]) { const g = document.createElement('span'); g.className = `tag ${e.alert}`; g.textContent = DAMAGE[e.alert]; t.append(g); }
   const meta = document.createElement('div'); meta.className = 'm';
   const bits = [ago(e.time, Date.now()), Date.now() - e.time > OLD ? dateFmt.format(new Date(e.time)) : whenLabel(e.time)];
+  // Near a chosen place, the clock at the quake too: whether it struck at night there.
+  if (e.d != null && PLACES && Date.now() - e.time <= OLD) {
+    if (!TZ_AT.has(e.id)) TZ_AT.set(e.id, zoneAt(PLACES, ZONES, e.lat, e.lon));
+    const there = thereLabel(e.time, TZ_AT.get(e.id), READER_TZ);
+    if (there) bits.push(there);
+  }
   if (e.depth != null) bits.push(`${Math.round(e.depth)} km deep`);
   if (e.felt) bits.push(`${fmt(e.felt)} felt report${e.felt === 1 ? '' : 's'}`);
   meta.textContent = bits.join(' · ');
@@ -292,6 +299,8 @@ function drawList() {
     $('listTitle').textContent = `${SORT_WORD[sortBy()]} in the world ${WORDS[state.period]}`;
   }
   ol.replaceChildren(...rows.slice(0, state.shown).map(row));
+  // A tapped point or a ?near= link can draw before the towns are in; their zones come with them.
+  if (at && !PLACES && !placesP) loadPlaces().then(() => drawList()).catch(() => {});
   $('more').hidden = rows.length <= state.shown;
   $('more').textContent = `Show more (${fmt(rows.length - state.shown)} left)`;
   $('sortNear').disabled = !at;
@@ -312,7 +321,7 @@ function setPoint(at, name = null) {
 
 async function loadPlaces() {
   placesP ||= fetch('data/places.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
-  try { PLACES = (await placesP).places; return PLACES; }
+  try { const doc = await placesP; ZONES = doc.zones; PLACES = doc.places; return PLACES; }
   catch (e) { placesP = null; throw e; }
 }
 

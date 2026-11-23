@@ -193,6 +193,20 @@ if (existsSync(placesFile)) {
     P.filter((p) => p[L.P.NEAR]).length >= 50, P.filter((p) => p[L.P.NEAR]).length);
   ok('shipped: a hint is a real town of the same country',
     P.every((p) => !p[L.P.NEAR] || P.some((o) => o[L.P.NAME] === p[L.P.NEAR] && o[L.P.CC] === p[L.P.CC])), true);
+  // Each town's zone, read by app.js as zones[p[P.TZ]] to give the clock at a quake.
+  const Zs = JSON.parse(readFileSync(placesFile, 'utf8')).zones;
+  const bad = P.filter((p) => { try { new Intl.DateTimeFormat('en-US', { timeZone: Zs[p[L.P.TZ]] }); return !Zs[p[L.P.TZ]]; } catch { return true; } });
+  eq('shipped: every town has a zone the browser knows', [bad.length, bad.slice(0, 2)], [0, []]);
+  ok('shipped: zones are many, not one', Zs.length > 300, Zs.length);
+  eq('shipped: the clock at real quake spots', [
+    [36.607, -121.208],  // 10 km NW of Pinnacles, CA, M5.0 2026-11-20
+    [35.69, 139.69],     // Tokyo
+    [27.7, 85.3],        // Kathmandu
+    [32.5, -117.05],     // Tijuana, over the border from San Diego
+    [-17.9, -179.95],    // Fiji, across the antimeridian
+    [0, -20],            // the mid-Atlantic ridge: no town within 300 km
+  ].map(([a, b]) => L.zoneAt(P, Zs, a, b)), ['America/Los_Angeles', 'Asia/Tokyo', 'Asia/Kathmandu', 'America/Tijuana', 'Pacific/Fiji', null]);
+  eq('shipped: P.TZ names the zone column', Zs[pa[L.P.TZ]], 'America/Los_Angeles');
 } else ok('shipped: data/places.json exists (run build.py)', false);
 
 // --- since 1900 -------------------------------------------------------------------------
@@ -232,6 +246,22 @@ if (fdsnFix) {
   eq('row time in July says PDT', L.whenLabel(summer, 'America/Los_Angeles', 'en-US'), 'Sat, Jul 4, 12:05 PM PDT');
   eq('a second locale in the same zone is not served the first one\'s format', L.whenLabel(t, 'America/Los_Angeles', 'en-GB'), 'Sat 21 Nov, 01:42 GMT-8');
   eq('back in the first zone after another', L.whenLabel(t, 'UTC', 'en-US'), 'Sat, Nov 21, 09:42 AM UTC');
+  // The clock at the quake, beside the reader's: said only when it reads differently.
+  const LA = 'America/Los_Angeles';
+  eq('there: Tokyo read from California', L.thereLabel(t, 'Asia/Tokyo', LA, 'en-US'), 'Sat 06:42 PM there');
+  eq('there: a half-and-quarter-hour zone', L.thereLabel(t, 'Asia/Kathmandu', LA, 'en-US'), 'Sat 03:27 PM there');
+  eq('there: the day can differ', L.thereLabel(Date.UTC(2026, 10, 21, 5, 0), 'Asia/Tokyo', LA, 'en-US'), 'Sat 02:00 PM there');
+  eq('there: nothing when the clock there is the reader\'s', L.thereLabel(t, LA, LA, 'en-US'), null);
+  eq('there: nothing when another zone name keeps the same clock', L.thereLabel(t, 'America/Tijuana', LA, 'en-US'), null);
+  eq('there: nothing when the quake has no town near it', L.thereLabel(t, null, LA, 'en-US'), null);
+  eq('there: a second locale is not served the first one\'s format', L.thereLabel(t, 'Asia/Tokyo', LA, 'en-GB'), 'Sat 18:42 there');
+  eq('there: back to the first reader after another', L.thereLabel(t, 'Asia/Tokyo', 'UTC', 'en-US'), 'Sat 06:42 PM there');
+  const towns = [['A', '', 'X', 10, 10, 9, 0], ['B', '', 'Y', 10, 12.5, 5, 1], ['C', '', 'Z', 40, 10, 1, 2]];
+  const Z = ['Zone/A', 'Zone/B', 'Zone/C'];
+  eq('zoneAt: the nearest town, not the biggest', L.zoneAt(towns, Z, 10, 12), 'Zone/B');
+  eq('zoneAt: nearest past a bigger town', L.zoneAt(towns, Z, 10, 10.5), 'Zone/A');
+  eq('zoneAt: none within reach is null', L.zoneAt(towns, Z, 25, 10), null);
+  eq('zoneAt: the reach is ZONE_KM, edge inclusive', [L.zoneAt(towns, Z, 10 + 299 / 111.195, 10), L.zoneAt(towns, Z, 10 + 301 / 111.195, 10)], ['Zone/A', null]);
 }
 
 // --- exact edges ---------------------------------------------------------------------------
